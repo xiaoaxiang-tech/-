@@ -1,0 +1,320 @@
+    if (!bossDead && this.player.hp <= 0) {
+      this.gameOverTimer++
+      if (this.gameOverTimer > 90) {
+        this.state = 'gameOver'
+        this.onStateChange?.('gameOver')
+        soundEngine.playDefeat()
+        soundEngine.stopMusic()
+      }
+    }
+    if (this.bossWarningTimer > 0) this.bossWarningTimer--
+    if (this.sceneHintTimer > 0) this.sceneHintTimer--
+    this.bgAnimator.update(1)
+    this.particles.update()
+
+    // 场景过渡动画更新
+    this.updateSceneTransitionAnimation()
+
+    // 宠物更新
+    if (this.petEntity && this.activePetConfig) {
+      const attackResult = this.petEntity.update(
+        this.player.x, this.player.y, this.player.width, this.player.height,
+        this.platforms, this.enemies, this.boss
+      )
+      if (attackResult?.fire) {
+        soundEngine.playPetAttack()
+        // 宠物发射投射物
+        const px = this.petEntity.x + this.petEntity.width / 2
+        const py = this.petEntity.y + this.petEntity.height / 2
+        const dx = attackResult.targetX - px
+        const dy = attackResult.targetY - py
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1
+        const speed = 8
+        this.projectiles.push(createProjectile(
+          px, py,
+          (dx / dist) * speed,
+          (dy / dist) * speed * 0.3,
+          this.activePetConfig.projectileType || 'magic',
+          this.activePetConfig.attackDamage,
+          this.petEntity.dir, 'player', 80
+        ))
+      }
+    }
+  }
+
+  private getInputState() {
+    return (window as any).__gameInput || { left: false, right: false, jump: false, attack: false, skill1: false, skill2: false, ultimate: false, switchWeapon: false, pause: false, directWeapon: -1 }
+  }
+
+  private sendStats() {
+    this.onStatsChange?.(this.player.getStats())
+  }
+
+  private sendBossHP() {
+    if (this.boss) {
+      this.onBossHP?.(this.boss.hp, this.boss.maxHp, this.boss.config.name)
+    } else {
+      this.onBossHP?.(0, 0, '')
+    }
+  }
+
+  private updateItems() {
+    for (let i = this.items.length - 1; i >= 0; i--) {
+      const item = this.items[i]!
+      item.y += 0.5; item.life--
+      if (item.life <= 0) { this.items.splice(i, 1); continue }
+      if (PhysicsManager.rectCollide(this.player.rect, { x: item.x, y: item.y, width: item.w, height: item.h })) {
+        switch (item.type) {
+          case 'health': this.player.heal(20); this.particles.addFloatingText(item.x, item.y, '+20HP', '#4f4'); soundEngine.playPickupHealth(); break
+          case 'mana': this.player.restoreMp(15); this.particles.addFloatingText(item.x, item.y, '+15MP', '#48f'); soundEngine.playPickupMana(); break
+          case 'coin_bronze': this.player.addCoins(1); soundEngine.playPickupCoin(); break
+          case 'coin_silver': this.player.addCoins(5); soundEngine.playPickupCoin(); break
+          case 'coin_gold': this.player.addCoins(10); soundEngine.playPickupCoin(); break
+          case 'equip':
+            if (item.equip) this.pickupEquip(item.equip, item.x, item.y)
+            else this.player.addCoins(20)
+            break
+        }
+        this.items.splice(i, 1)
+      }
+    }
+  }
+
+  // ==== 宝箱系统 ====
+  // ==== 可交互障碍物 ====
+  /** 玩家碰撞体 = 平台 + 存活的木箱/炸药桶（可站立/阻挡） */
+  private getCollisionPlatforms(): Platform[] {
+    const solid = this.obstacles.filter(o => o.alive && (o.type === 'crate' || o.type === 'barrel'))
+    if (solid.length === 0) return this.platforms
+    return [...this.platforms, ...solid.map(o => ({ x: o.x, y: o.y, width: o.w, height: o.h, type: 'platform' as const }))]
+  }
+
+  private buildObstacles(scene: { id: number; length: number; chests?: ChestConfig[]; obstacles?: ObstacleConfig[] }, offsetX: number): ObstacleData[] {
+    const configs = scene.obstacles?.length ? scene.obstacles : this.autoObstacleConfigs(scene)
+    return configs.map(c => {
+      const dims = OBSTACLE_DIMS[c.type]
+      const x = c.x + offsetX - dims.w / 2
+      const y = c.y !== undefined ? c.y - dims.h : this.config.groundY - dims.h
+      return {
+        x, y, w: dims.w, h: dims.h,
+        type: c.type,
+        hp: c.type === 'crate' ? 2 : c.type === 'barrel' ? 3 : 9999,
+        broken: false, hitFlash: 0, alive: true
+      }
+    })
+  }
+
+  /** 未手工配置障碍物时，按场景自动生成 2-4 个可交互障碍物（木箱/尖刺/炸药桶） */
+  private autoObstacleConfigs(scene: { id: number; length: number; chests?: ChestConfig[] }): ObstacleConfig[] {
+    const out: ObstacleConfig[] = []
+    const span = scene.length
+    const count = 2 + (scene.id % 3) // 2-4 个
+    // 宝箱 x 坐标（避开，避免重叠）
+    const chestXs = (scene.chests ?? []).map(c => c.x)
+    let placed = 0
+    let attempt = 0
+    while (placed < count && attempt < 80) {
+      attempt++
+      const base = 0.22 + (attempt % 5) * 0.05
+      const x = Math.floor(span * Math.min(base + placed * 0.2, 0.9))
+      if (x <= 200) continue
+      if (chestXs.some(cx => Math.abs(cx - x) < 80)) continue
+      const type: ObstacleType =
+        (scene.id + placed) % 3 === 0 ? 'barrel'
+          : (scene.id + placed) % 3 === 1 ? 'spikes'
+            : 'crate'
+      out.push({ x, type })
+      placed++
+    }
+    return out
+  }
+
+  private updateObstacles() {
+    for (let i = this.obstacles.length - 1; i >= 0; i--) {
+      const ob = this.obstacles[i]!
+      if (!ob.alive) { this.obstacles.splice(i, 1); continue }
+      if (ob.hitFlash > 0) ob.hitFlash--
+      const rect = { x: ob.x, y: ob.y, width: ob.w, height: ob.h }
+
+      // 尖刺：接触受伤（无敌帧内不重复触发）
+      if (ob.type === 'spikes' && !this.player.invincible && PhysicsManager.rectCollide(this.player.rect, rect)) {
+        const actual = this.player.takeDamage(Math.max(1, Math.floor(this.player.maxHp * 0.1)))
+        if (actual) {
+          this.particles.addFloatingText(this.player.x + this.player.width / 2, this.player.y, `-${actual}`, '#f66')
+          this.shake(3)
+          soundEngine.playPlayerHurt()
+          // 向反方向弹开
+          this.player.x += this.player.x + this.player.width / 2 < ob.x + ob.w / 2 ? -16 : 16
+        }
+      }
+
+      // 近战攻击破坏木箱/炸药桶
+      if (this.player.attacking && this.player.attackTimer > 4 && (ob.type === 'crate' || ob.type === 'barrel')) {
+        const ws = this.player.currentWeaponStats
+        if ((ws.type === 'sword' || ws.type === 'spear') && PhysicsManager.rectCollide(this.player.attackBox, rect)) {
+          ob.hitFlash = 6
+          ob.hp--
+          this.particles.emit(ob.x + ob.w / 2, ob.y + ob.h / 2, 4, '#ffcc88', { size: 2 })
+          soundEngine.playEnemyHit()
+          if (ob.hp <= 0) this.breakObstacle(ob)
+        }
+      }
+
+      // 炸药桶：玩家弹幕击中引爆
+      if (ob.type === 'barrel' && ob.alive) {
+        for (const p of this.projectiles) {
+          if (p.owner !== 'player') continue
+          if (PhysicsManager.rectCollide(projectileRect(p), rect)) {
+            this.breakObstacle(ob)
+            break
+          }
+        }
+      }
+    }
+  }
+
+  private breakObstacle(ob: ObstacleData) {
+    if (!ob.alive) return
+    ob.alive = false
+    ob.broken = true
+    const cx = ob.x + ob.w / 2
+    const cy = ob.y + ob.h / 2
+
+    if (ob.type === 'crate') {
+      // 木屑飞溅
+      for (let k = 0; k < 12; k++) {
+        this.particles.add({
+          x: cx, y: cy,
+          vx: (Math.random() - 0.5) * 5, vy: -Math.random() * 4,
+          life: 20 + Math.random() * 20, maxLife: 40,
+          size: 2.5, color: k % 2 ? '#d8a05f' : '#8a5a2a', alpha: 1,
+        })
+      }
+      soundEngine.playHit()
+      this.dropItems(cx, cy, [
+        { item: 'coin_bronze', chance: 0.9 },
+        { item: 'coin_silver', chance: 0.25 },
+        { item: 'health', chance: 0.3 },
+        { item: 'mana', chance: 0.25 },
+      ])
+      if (Math.random() < 0.2) this.dropEquip(cx, cy, Math.max(0, this.currentLevelId))
+    } else if (ob.type === 'barrel') {
+      // 爆炸：火圈粒子 + 范围伤害
+      for (let k = 0; k < 26; k++) {
+        const angle = Math.random() * Math.PI * 2
+        const speed = 1 + Math.random() * 4
+        this.particles.add({
+          x: cx, y: cy,
+          vx: Math.cos(angle) * speed * 2.2, vy: Math.sin(angle) * speed * 2.2 - 3,
+          life: 20 + Math.random() * 20, maxLife: 40,
+          size: 3 + Math.random() * 2,
+          color: ['#ff4400', '#ffaa00', '#ffdd66', '#ffffff'][k % 4]!,
+          alpha: 1,
+        })
+      }
+      soundEngine.playBossRoar()
+      this.shake(6)
+      const boom = { x: cx - 55, y: cy - 55, width: 110, height: 110 }
+      for (const enemy of this.enemies) {
+        if (enemy.isAlive && PhysicsManager.rectCollide(enemy.rect, boom)) {
+          enemy.takeDamage(50)
+          this.particles.addFloatingText(enemy.x + enemy.width / 2, enemy.y, '-50', '#f84')
+        }
+      }
+      if (this.boss?.isAlive && PhysicsManager.rectCollide(this.boss.rect, boom)) {
+        this.boss.takeDamage(50)
+        this.particles.addFloatingText(this.boss.x + this.boss.width / 2, this.boss.y, '-50', '#f84')
+      }
+      // 玩家在爆炸范围内也会受伤（注意距离，主动引爆桶子有一定风险）
+      if (PhysicsManager.rectCollide(this.player.rect, boom)) {
+        const actual = this.player.takeDamage(22)
+        if (actual) this.particles.addFloatingText(this.player.x + this.player.width / 2, this.player.y, `-${actual}`, '#f44')
+      }
+    }
+    this.particles.emit(cx, cy, 8, '#ffffff', { size: 2 })
+  }
+
+  private buildChests(scene: { chests?: ChestConfig[]; secretArea?: { chests?: ChestConfig[] } }, offsetX: number): ChestData[] {
+    const configs: ChestConfig[] = [...(scene.chests ?? []), ...(scene.secretArea?.chests ?? [])]
+    return configs.map(c => ({
+      x: c.x + offsetX,
+      y: this.findGroundY(c.x + offsetX, c.y),
+      w: 34,
+      h: 24,
+      type: c.type,
+      opened: false,
+      openTimer: 0
+    }))
+  }
+
+  private findGroundY(x: number, explicitBottomY?: number): number {
+    if (explicitBottomY !== undefined) return explicitBottomY
+    let best = -1
+    for (const p of this.platforms) {
+      if (x >= p.x - 12 && x <= p.x + p.width + 12) {
+        if (best === -1 || p.y < best) best = p.y
+      }
+    }
+    return best > 0 ? best : this.config.groundY
+  }
+
+  private updateChests() {
+    for (const chest of this.chests) {
+      if (chest.opened) {
+        chest.openTimer++
+        continue
+      }
+      const rect = { x: chest.x - chest.w / 2, y: chest.y - chest.h, width: chest.w, height: chest.h }
+      if (PhysicsManager.rectCollide(this.player.rect, rect)) {
+        this.openChest(chest)
+      }
+    }
+  }
+
+  private openChest(chest: ChestData) {
+    if (chest.opened) return
+    chest.opened = true
+    chest.openTimer = 0
+    const cx = chest.x
+    const cy = chest.y - chest.h / 2
+    const color = chest.type === 'special' ? '#c39bd3' : chest.type === 'gold' ? '#ffd700' : '#b8860b'
+    this.particles.emit(cx, cy, 14, color)
+    this.particles.addFloatingText(cx, cy - 18, chest.type === 'special' ? '稀有宝藏！' : chest.type === 'gold' ? '黄金宝箱！' : '宝箱！', color)
+    soundEngine.playPickupCoin()
+    if (chest.type === 'common') {
+      this.dropItems(cx, cy, [
+        { item: 'coin_bronze', chance: 1 },
+        { item: 'coin_bronze', chance: 0.7 },
+        { item: 'health', chance: 0.5 },
+        { item: 'mana', chance: 0.4 },
+        { item: 'equip', chance: 0.35 }
+      ])
+    } else if (chest.type === 'gold') {
+      this.dropItems(cx, cy, [
+        { item: 'coin_silver', chance: 1 },
+        { item: 'coin_silver', chance: 0.9 },
+        { item: 'coin_gold', chance: 0.6 },
+        { item: 'health', chance: 0.7 },
+        { item: 'mana', chance: 0.6 },
+        { item: 'equip', chance: 0.7 }
+      ])
+    } else {
+      // 特殊宝箱：直接给予丰厚奖励 + 必掉高阶装备
+      this.dropItems(cx, cy, [
+        { item: 'coin_gold', chance: 1 },
+        { item: 'coin_gold', chance: 0.8 },
+        { item: 'health', chance: 1 },
+        { item: 'mana', chance: 1 }
+      ])
+      this.dropEquip(cx, cy, Math.min(4, this.currentLevelId + 1))
+      this.player.addExp(60)
+      this.player.heal(20)
+      this.player.restoreMp(20)
+      this.particles.addFloatingText(cx, cy - 34, '+60 EXP  +20HP  +20MP', '#ffd700')
+    }
+  }
+
+  // ==== 秘密通道 ====
+  private updateSecretArea() {
+    const scene = this.getActiveScene()
+    const secret = scene?.secretArea

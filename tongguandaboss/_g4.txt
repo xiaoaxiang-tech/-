@@ -1,0 +1,320 @@
+        const ex = boss.x + (i - 1) * 80 + Math.random() * 40
+        const ey = this.config.groundY - 36
+        const e = new Enemy(ENEMY_CONFIGS[i % 2 === 0 ? 'slime' : 'skeleton']!, ex, ey)
+        this.enemies.push(e)
+      }
+    }
+  }
+
+  private manageWaves() {
+    const scene = this.getActiveScene()
+    if (!scene) return
+    if (this.waveIndex >= scene.waves.length) {
+      return
+    }
+    const wave = scene.waves[this.waveIndex]!
+    let allSpawned = true
+    for (const group of wave.enemies) {
+      const key = `${this.activeSceneIndex}-${this.waveIndex}-${group.type}`
+      let t = this.waveSpawnTimers.get(key) ?? 0
+      if (t >= group.count) continue
+      allSpawned = false; t++
+      if (t % group.delay === 0 || t === 1) {
+        for (let i = 0; i < 1; i++) {
+          const ex = this.sceneStartX + group.x + Math.random() * 60
+          const ey = group.y
+          const cfg = ENEMY_CONFIGS[group.type]!
+          const enemy = new Enemy(cfg, ex, ey, !!group.elite)
+          this.enemies.push(enemy)
+        }
+      }
+      this.waveSpawnTimers.set(key, t)
+    }
+    if (allSpawned && this.enemies.length === 0) {
+      this.waveIndex++
+      if (this.waveIndex >= scene.waves.length) {
+        this.sceneCleared = true
+      }
+      this.onWaveChange?.(this.waveIndex + 1, scene.waves.length)
+      this.waveSpawnTimers.clear()
+    }
+  }
+
+  private updateSceneTransition() {
+    // 过渡动画期间不检测传送门
+    if (this.sceneTransitionPhase !== 'idle') return
+
+    const scenes = this.getLevelScenes()
+    if (!this.sceneCleared) return
+    if (this.activeSceneIndex >= scenes.length - 1) {
+      this.isBossStage = true
+      return
+    }
+
+    const scene = scenes[this.activeSceneIndex]!
+    const sceneEndX = this.sceneStartX + scene.length
+    const transitionStartX = sceneEndX - 220
+    const transitionHintX = sceneEndX - 320
+
+    if (this.player.x >= transitionHintX && this.sceneHintTimer <= 0) {
+      this.sceneHintText = '传送门即将开启：继续向前'
+      this.sceneHintTimer = 90
+    }
+
+    if (this.player.x >= transitionStartX) {
+      this.advanceToNextScene()
+    }
+  }
+
+  // ====== 场景过渡动画状态机 ======
+  private updateSceneTransitionAnimation() {
+    if (this.sceneTransitionPhase === 'idle') return
+
+    this.sceneTransitionTimer++
+    const t = this.sceneTransitionTimer
+
+    switch (this.sceneTransitionPhase) {
+      case 'fadeout':
+        // 30帧淡出（屏幕变黑 + 粒子汇聚）
+        this.transitionAlpha = Math.min(1, t / 30)
+        // 屏幕震动效果
+        if (t === 15) { this.shakeTime = 8; this.shakeIntensity = 6 }
+        // 生成传送粒子
+        if (t % 3 === 0 && t < 27) {
+          for (let i = 0; i < 4; i++) {
+            const px = Math.random() * this.config.width
+            const py = Math.random() * this.config.height
+            this.particles.add({
+              x: px, y: py,
+              vx: (this.config.width / 2 - px) * 0.08,
+              vy: (this.config.height / 2 - py) * 0.08,
+              life: 30, maxLife: 30,
+              color: BackgroundAnimator.getThemeColorFor(this.getPendingSceneTheme()),
+              size: 3 + Math.random() * 3,
+              alpha: 1
+            })
+          }
+        }
+        if (t >= 30) {
+          this.sceneTransitionPhase = 'hold'
+          this.sceneTransitionTimer = 0
+          // 在 hold 阶段执行实际场景切换
+          this.executeSceneSwitch()
+          // 显示新场景名称
+          const newScene = this.getLevelScenes()[this.activeSceneIndex]
+          if (newScene) {
+            this.sceneHintText = `进入：${newScene.name} ${BackgroundAnimator.getThemeNameFor(this.getActiveSceneTheme())}`
+            this.sceneHintTimer = 120
+          }
+        }
+        break
+
+      case 'hold':
+        // 20帧保持全黑（给玩家感知切换的时间）
+        this.transitionAlpha = 1
+        if (t >= 20) {
+          this.sceneTransitionPhase = 'fadein'
+          this.sceneTransitionTimer = 0
+        }
+        break
+
+      case 'fadein':
+        // 35帧淡入（屏幕恢复）
+        this.transitionAlpha = Math.max(0, 1 - t / 35)
+        // 淡入时散发光粒子
+        if (t < 20 && t % 2 === 0) {
+          const cx = this.config.width / 2 + (Math.random() - 0.5) * 200
+          const cy = this.config.height / 2 + (Math.random() - 0.5) * 100
+          this.particles.add({
+            x: cx, y: cy,
+            vx: (Math.random() - 0.5) * 3,
+            vy: (Math.random() - 0.5) * 3 - 1,
+            life: 40, maxLife: 40,
+            color: '#ffffff',
+            size: 2 + Math.random() * 2,
+            alpha: 0.8
+          })
+        }
+        if (t >= 35) {
+          this.sceneTransitionPhase = 'idle'
+          this.transitionAlpha = 0
+          this.sceneTransitionTimer = 0
+        }
+        break
+    }
+  }
+
+  private getLevelScenes() {
+    if (this.levelConfig.scenes?.length) return this.levelConfig.scenes
+    return [{ id: 0, name: '主线', length: this.levelConfig.levelLength, platforms: this.levelConfig.platforms, waves: this.levelConfig.waves }]
+  }
+
+  private getActiveScene() {
+    return this.getLevelScenes()[this.activeSceneIndex]
+  }
+
+  /** 当前激活场景的背景主题索引 */
+  private getActiveSceneTheme(): number {
+    return this.getActiveScene()?.theme ?? 0
+  }
+
+  /** 待切换目标场景的背景主题索引 */
+  private getPendingSceneTheme(): number {
+    if (this.pendingSceneIndex < 0) return 0
+    return this.getLevelScenes()[this.pendingSceneIndex]?.theme ?? 0
+  }
+
+  private buildScenePlatforms(scene: { platforms: Platform[]; secretArea?: { platforms?: Platform[] } }, offsetX: number) {
+    const all = [...scene.platforms, ...(scene.secretArea?.platforms ?? [])]
+    return all.map(platform => ({ ...platform, x: platform.x + offsetX }))
+  }
+
+  private advanceToNextScene() {
+    const scenes = this.getLevelScenes()
+    if (this.activeSceneIndex >= scenes.length - 1) {
+      this.isBossStage = true
+      return
+    }
+
+    // 启动场景过渡动画（而不是瞬间切换）
+    const currentScene = scenes[this.activeSceneIndex]!
+    this.transitionFromSceneName = currentScene.name
+    this.transitionToSceneName = scenes[this.activeSceneIndex + 1]!.name
+    this.pendingSceneIndex = this.activeSceneIndex + 1
+    this.sceneTransitionPhase = 'fadeout'
+    this.sceneTransitionTimer = 0
+    this.transitionAlpha = 0
+    // 暂停玩家输入
+    this.player.vx = 0
+    this.player.vy = 0
+    soundEngine.playPickupHealth() // 复用音效作为传送音效
+  }
+
+  // 执行场景切换（在过渡动画的 hold 阶段调用）
+  private executeSceneSwitch() {
+    const scenes = this.getLevelScenes()
+    if (this.pendingSceneIndex < 0 || this.pendingSceneIndex >= scenes.length) return
+
+    this.activeSceneIndex = this.pendingSceneIndex
+    this.pendingSceneIndex = -1
+    this.waveIndex = 0
+    this.waveSpawnTimers.clear()
+    this.enemies = []
+    this.projectiles = this.projectiles.filter(p => p.owner !== 'enemy')
+    this.sceneCleared = false
+
+    const scene = scenes[this.activeSceneIndex]!
+    const previousOffset = this.sceneStartX
+    this.sceneStartX = scenes.slice(0, this.activeSceneIndex).reduce((sum, item) => sum + item.length, 0)
+    this.platforms = this.buildScenePlatforms(scene, this.sceneStartX)
+    this.chests = this.buildChests(scene, this.sceneStartX)
+    this.obstacles = this.buildObstacles(scene, this.sceneStartX)
+    this.secretSpawned.clear()
+    this.secretHintKey = ''
+
+    this.player.x = Math.max(this.sceneStartX + 80, Math.min(this.player.x + 80, this.sceneStartX + scene.length - 120))
+    this.player.y = this.config.groundY - this.player.height
+    this.player.vx = 0
+    this.player.vy = 0
+    this.cameraX = Math.max(0, Math.min(this.sceneStartX, this.levelConfig.levelLength - this.config.width))
+
+    if (this.player.x > this.sceneStartX + scene.length - 160) {
+      this.player.x = this.sceneStartX + 80
+    }
+    this.player.x = Math.max(this.player.x, previousOffset + 80)
+
+    // 切换背景主题（场景主题驱动背景与粒子层）
+    this.bgAnimator.setTheme(scene.theme ?? 0)
+  }
+
+  private updateBossStage() {
+    if (this.isBossStage && !this.bossSpawned) {
+      this.preBossTimer++
+      if (this.preBossTimer > 120) { this.spawnBoss(); this.bossSpawned = true; this.bossWarningTimer = 90 }
+    }
+  }
+
+  private spawnBoss() {
+    const bx = this.levelConfig.levelLength - 300
+    const by = this.config.groundY - this.levelConfig.boss.height
+    this.boss = new Boss(this.levelConfig.boss, bx, by, this.config.groundY)
+    this.onBossHP?.(this.boss.hp, this.boss.maxHp, this.boss.config.name)
+    soundEngine.playBossWarn()
+  }
+
+  private dropItems(x: number, y: number, table: { item: string; chance: number }[]) {
+    for (const drop of table) {
+      if (drop.item === 'equip') {
+        // 装备掉落：按当前关卡难度生成
+        if (Math.random() < drop.chance) {
+          const eq = rollEquipmentDrop(this.currentLevelId)
+          if (eq) this.items.push({ x: x - 11, y: y - 11, w: 22, h: 22, type: 'equip', equip: eq, life: 600 })
+        }
+        continue
+      }
+      if (Math.random() < drop.chance) {
+        this.items.push({ x: x - 6, y: y - 6, w: 12, h: 12, type: drop.item, life: 300 })
+      }
+    }
+  }
+
+  /** 掉落指定阶数附近的装备（用于精英/Boss/特殊宝箱） */
+  private dropEquip(x: number, y: number, tier: number) {
+    let t = Math.max(0, Math.min(4, Math.floor(tier)))
+    const r = Math.random()
+    if (r < 0.3) t = Math.min(4, t + 1)
+    else if (r < 0.45) t = Math.max(0, t - 1)
+    let eq: EquipDrop | null
+    if (Math.random() < 0.35) {
+      const spec = getArmorSpec(t)
+      eq = spec ? armorEquip(spec) : null
+    } else {
+      eq = weaponEquip(randomWeaponType(), t)
+    }
+    if (eq) this.items.push({ x: x - 11, y: y - 11, w: 22, h: 22, type: 'equip', equip: eq, life: 600 })
+  }
+
+  /** 拾取装备：自动学习 + 同槽更高阶自动替换，并同步到存档 */
+  private pickupEquip(eq: EquipDrop, ix: number, iy: number) {
+    const isUpgrade =
+      eq.slot === 'weapon' && eq.weaponType
+        ? eq.tier > this.player.weaponTiers[eq.weaponType]
+        : eq.slot === 'armor'
+          ? eq.tier > (this.player.armorSlot?.tier ?? -1)
+          : false
+
+    if (eq.slot === 'weapon' && eq.weaponType) {
+      this.player.learnWeapon(eq.weaponType, eq.tier)
+      this.particles.addFloatingText(ix, iy - 14, `获得 ${eq.name}!`, eq.color)
+      this.particles.emit(ix, iy, 8, eq.color)
+      if (isUpgrade) {
+        soundEngine.playEquip()
+        this.particles.addFloatingText(ix, iy - 28, '已替换旧装备', '#fff')
+      } else {
+        soundEngine.playEquipLow()
+        this.particles.addFloatingText(ix, iy - 28, '已收录到装备栏', '#ccc')
+      }
+      // 必须先同步全局装备状态，GameCanvas 的回调才能读到最新值
+      this.syncEquipment()
+      this.onEquipmentChange?.({
+        kind: 'weapon', slot: 'weapon', weaponType: eq.weaponType,
+        name: eq.name, tier: eq.tier, equipped: isUpgrade, levelId: this.currentLevelId
+      })
+    } else if (eq.slot === 'armor') {
+      this.player.learnArmor(eq.tier)
+      this.particles.addFloatingText(ix, iy - 14, `获得 ${eq.name}!`, eq.color)
+      this.particles.emit(ix, iy, 8, eq.color)
+      if (isUpgrade) {
+        soundEngine.playEquip()
+        this.particles.addFloatingText(ix, iy - 28, '已替换旧装备', '#fff')
+      } else {
+        soundEngine.playEquipLow()
+        this.particles.addFloatingText(ix, iy - 28, '已收录到装备栏', '#ccc')
+      }
+      // 必须先同步全局装备状态，GameCanvas 的回调才能读到最新值
+      this.syncEquipment()
+      this.onEquipmentChange?.({
+        kind: 'armor', slot: 'armor',
+        name: eq.name, tier: eq.tier, equipped: isUpgrade, levelId: this.currentLevelId
+      })
+    }

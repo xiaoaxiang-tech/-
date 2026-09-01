@@ -1,0 +1,3 @@
+656: export function drawEnemySprite(
+1371: export function drawBossSprite(
+2062: export function drawProjectile(

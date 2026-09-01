@@ -1,0 +1,102 @@
+
+  currentLevelId: number = 0
+  private levelConfig!: LevelConfig
+  private platforms: Platform[] = []
+  private enemies: Enemy[] = []
+  private boss: Boss | null = null
+  private projectiles: ProjectileData[] = []
+  private items: ItemData[] = []
+  /** 可交互障碍物（木箱 / 尖刺 / 炸药桶） */
+  private obstacles: ObstacleData[] = []
+
+  private waveIndex: number = 0
+  private waveSpawnTimers: Map<string, number> = new Map()
+  private isBossStage: boolean = false
+  private activeSceneIndex: number = 0
+  private sceneStartX: number = 0
+  private sceneCleared: boolean = false
+  private sceneHintTimer: number = 0
+  private sceneHintText: string = ''
+  private bossSpawned: boolean = false
+  private preBossTimer: number = 0
+  private levelCompleteTimer: number = 0
+  private bossWarningTimer: number = 0
+  private gameOverTimer: number = 0
+
+  // ==== 宝箱 & 秘密通道 ====
+  private chests: ChestData[] = []
+  private secretSpawned = new Set<string>()
+  private secretHintKey: string = ''
+
+  // ====== 场景过渡动画 ======
+  private sceneTransitionTimer: number = 0
+  private sceneTransitionPhase: 'idle' | 'fadeout' | 'hold' | 'fadein' = 'idle'
+  private transitionFromSceneName: string = ''
+  private transitionToSceneName: string = ''
+  private transitionAlpha: number = 0
+  private pendingSceneIndex: number = -1
+
+  cameraX: number = 0
+  cameraY: number = 0
+  private shakeTime: number = 0
+  private shakeIntensity: number = 0
+  private lastWeapon: WeaponType = 'sword'
+  // 宠物
+  petEntity: PetEntity | null = null
+  activePetConfig: PetConfig | null = null
+  onPetUnlock?: () => void  // 宠物解锁回调
+
+  onStateChange?: (state: GameState) => void
+  onStatsChange?: (stats: any) => void
+  onBossHP?: (hp: number, maxHp: number, name: string) => void
+  onWaveChange?: (wave: number, total: number) => void
+  /** 装备变更回调（拾取/手动切换） */
+  onEquipmentChange?: (info: {
+    kind: 'weapon' | 'armor'
+    slot: EquipmentSlot
+    weaponType?: WeaponType
+    name: string
+    tier: number
+    equipped: boolean
+    levelId: number
+  }) => void
+
+  constructor(config: GameConfig) {
+    this.config = config
+    this.player = new Player(200, config.groundY - 55)
+    this.particles = new ParticleSystem()
+    this.bgAnimator = new BackgroundAnimator()
+    soundEngine.init()
+  }
+
+  startLevel(levelId: number) {
+    this.currentLevelId = levelId
+    const levelConfig = LEVEL_CONFIGS[levelId]
+    if (!levelConfig) return
+    this.levelConfig = levelConfig
+    const scenes = this.getLevelScenes()
+    const firstScene = scenes[0]
+    if (!firstScene) return
+    this.platforms = this.buildScenePlatforms(firstScene, 0)
+    this.enemies = []; this.boss = null; this.projectiles = []; this.items = []
+    this.chests = this.buildChests(firstScene, 0)
+    this.obstacles = this.buildObstacles(firstScene, 0)
+    this.secretSpawned.clear(); this.secretHintKey = ''
+    this.waveIndex = 0; this.waveSpawnTimers.clear()
+    this.isBossStage = false; this.bossSpawned = false
+    this.activeSceneIndex = 0; this.sceneStartX = 0
+    this.sceneCleared = false
+    this.sceneHintTimer = 0; this.sceneHintText = ''
+    this.preBossTimer = 0; this.levelCompleteTimer = 0
+    this.bossWarningTimer = 0; this.gameOverTimer = 0
+    this.cameraX = 0; this.cameraY = 0
+    this.player.respawn(200, this.config.groundY - 55)
+    // 应用冒险进度中的装备状态（跨关卡保留）
+    const equipState = (window as any).__equipState as EquipState | undefined
+    if (equipState) {
+      const types: WeaponType[] = ['sword', 'spear', 'bow', 'gun']
+      for (const t of types) {
+        this.player.equipWeapon(t, equipState.weaponTiers?.[t] ?? 0)
+      }
+      if (typeof equipState.armorTier === 'number' && equipState.armorTier >= 0) {
+        this.player.equipArmor(equipState.armorTier)

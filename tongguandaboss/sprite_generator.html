@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Sprite Generator - 像素精灵图生成器</title>
+<style>
+  body { background: #1a1a2e; color: #eee; font-family: monospace; padding: 20px; }
+  h1 { color: #e94560; }
+  .gallery { display: flex; flex-wrap: wrap; gap: 15px; margin: 20px 0; }
+  .sprite-item { text-align: center; }
+  .sprite-item canvas { background: #333; border: 1px solid #555; image-rendering: pixelated; }
+  .sprite-item canvas.bg { background: #87ceeb; }
+  .sprite-item .label { font-size: 12px; margin-top: 5px; color: #aaa; }
+  .controls { margin: 20px 0; }
+  button { background: #e94560; color: white; border: none; padding: 10px 20px; cursor: pointer; font-size: 14px; margin: 5px; }
+  button:hover { background: #ff6b81; }
+  .status { color: #4ade80; margin: 10px 0; }
+  .section { margin: 30px 0; padding: 15px; background: #16213e; border-radius: 8px; }
+  .section h2 { color: #e94560; margin-top: 0; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<h1>🎮 像素精灵图生成器</h1>
+<p>点击"生成所有精灵图"来创建游戏所需的全部素材</p>
+<div class="controls">
+  <button onclick="generateAll()">⚡ 生成所有精灵图</button>
+  <button onclick="downloadAll()">💾 下载所有精灵图</button>
+  <button onclick="location.reload()">🔄 重新加载</button>
+</div>
+<div id="status" class="status">等待生成...</div>
+
+<div class="section">
+  <h2>👤 玩家角色 (Player)</h2>
+  <div id="player" class="gallery"></div>
+</div>
+
+<div class="section">
+  <h2>👹 敌人 (Enemies)</h2>
+  <div id="enemies" class="gallery"></div>
+</div>
+
+<div class="section">
+  <h2>🐲 Boss</h2>
+  <div id="bosses" class="gallery"></div>
+</div>
+
+<div class="section">
+  <h2>🗺️ 场景背景 (Backgrounds)</h2>
+  <div id="backgrounds" class="gallery"></div>
+</div>
+
+<div class="section">
+  <h2>💎 道具和特效 (Items & Effects)</h2>
+  <div id="items" class="gallery"></div>
+</div>
+
+<script>
+const SPRITE_DIR = 'src/assets/sprites';
+
+function makeCanvas(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  c.style.imageRendering = 'pixelated';
+  return c;
+}
+
+function pixelRect(ctx, x, y, w, h, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, w, h);
+}
+
+function putPixel(ctx, x, y, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, 1, 1);
+}
+
+function setStatus(msg) {
+  document.getElementById('status').textContent = msg;
+}
+
+const generatedSprites = {};
+
+function addSprite(containerId, name, canvas) {
+  generatedSprites[name] = canvas;
+  const container = document.getElementById(containerId);
+  const item = document.createElement('div');
+  item.className = 'sprite-item';
+  const display = makeCanvas(canvas.width * 3, canvas.height * 3);
+  const dctx = display.getContext('2d');
+  dctx.imageSmoothingEnabled = false;
+  dctx.drawImage(canvas, 0, 0, display.width, display.height);
+  const label = document.createElement('div');
+  label.className = 'label';
+  label.textContent = name;
+  item.appendChild(display);
+  item.appendChild(label);
+  container.appendChild(item);
+}
+
+// ============ PLAYER SPRITES ============
+function drawPlayerIdle() {
+  const c = makeCanvas(16, 24);
+  const ctx = c.getContext('2d');
+  // Simple pixel art knight
+  // Helmet
+  pixelRect(ctx, 5, 0, 6, 1, '#4a5568');
+  pixelRect(ctx, 4, 1, 8, 3, '#4a5568');
+  pixelRect(ctx, 4, 4, 8, 1, '#2d3748');
+  // Face
+  pixelRect(ctx, 5, 5, 6, 4, '#fbd38d');
+  putPixel(ctx, 6, 7, '#1a202c');
+  putPixel(ctx, 9, 7, '#1a202c');
+  pixelRect(ctx, 7, 8, 2, 1, '#e53e3e');
+  // Body / armor
+  pixelRect(ctx, 4, 9, 8, 6, '#3182ce');
+  pixelRect(ctx, 5, 10, 6, 1, '#2b6cb0');
+  pixelRect(ctx, 7, 10, 2, 4, '#f7e08b');
+  // Belt
+  pixelRect(ctx, 4, 15, 8, 1, '#744210');
+  pixelRect(ctx, 7, 15, 2, 1, '#d69e2e');
+  // Legs
+  pixelRect(ctx, 4, 16, 3, 4, '#2d3748');
+  pixelRect(ctx, 9, 16, 3, 4, '#2d3748');
+  // Boots
+  pixelRect(ctx, 4, 20, 3, 2, '#4a5568');
+  pixelRect(ctx, 9, 20, 3, 2, '#4a5568');
+  // Arms
+  pixelRect(ctx, 2, 10, 2, 5, '#fbd38d');
+  pixelRect(ctx, 12, 10, 2, 5, '#fbd38d');
+  // Sword
+  pixelRect(ctx, 13, 4, 1, 12, '#a0aec0');
+  pixelRect(ctx, 12, 4, 3, 1, '#e2e8f0');
+  pixelRect(ctx, 12, 16, 3, 1, '#744210');
+  pixelRect(ctx, 13, 17, 1, 2, '#2d3748');
+  return c;
+}
+
+function drawPlayerWalk() {
+  const c = makeCanvas(16, 24);
+  const ctx = c.getContext('2d');
+  pixelRect(ctx, 5, 0, 6, 1, '#4a5568');
+  pixelRect(ctx, 4, 1, 8, 3, '#4a5568');
+  pixelRect(ctx, 4, 4, 8, 1, '#2d3748');
+  pixelRect(ctx, 5, 5, 6, 4, '#fbd38d');
+  putPixel(ctx, 6, 7, '#1a202c');
+  putPixel(ctx, 9, 7, '#1a202c');
+  pixelRect(ctx, 4, 9, 8, 6, '#3182ce');
+  pixelRect(ctx, 7, 10, 2, 4, '#f7e08b');
+  pixelRect(ctx, 4, 15, 8, 1, '#744210');
+  pixelRect(ctx, 3, 16, 3, 3, '#2d3748');
+  pixelRect(ctx, 10, 16, 3, 3, '#2d3748');
+  pixelRect(ctx, 3, 19, 4, 3, '#4a5568');
+  pixelRect(ctx, 9, 19, 4, 3, '#4a5568');
+  pixelRect(ctx, 2, 10, 2, 5, '#fbd38d');
+  pixelRect(ctx, 12, 11, 2, 5, '#fbd38d');
+  pixelRect(ctx, 13, 5, 1, 11, '#a0aec0');
+  pixelRect(ctx, 12, 5, 3, 1, '#e2e8f0');
+  pixelRect(ctx, 12, 16, 3, 1, '#744210');
+  return c;
+}
+
+function drawPlayerJump() {
+  const c = makeCanvas(16, 24);
+  const ctx = c.getContext('2d');
+  pixelRect(ctx, 5, 0, 6, 1, '#4a5568');
+  pixelRect(ctx, 4, 1, 8, 3, '#4a5568');
+  pixelRect(ctx, 4, 4, 8, 1, '#2d3748');
+  pixelRect(ctx, 5, 5, 6, 4, '#fbd38d');
+  putPixel(ctx, 6, 7, '#1a202c');
+  putPixel(ctx, 9, 7, '#1a202c');
+  pixelRect(ctx, 4, 9, 8, 6, '#3182ce');
+  pixelRect(ctx, 7, 10, 2, 4, '#f7e08b');
+  pixelRect(ctx, 4, 15, 8, 1, '#744210');
+  pixelRect(ctx, 4, 16, 3, 4, '#2d3748');
+  pixelRect(ctx, 9, 16, 3, 4, '#2d3748');
+  pixelRect(ctx, 2, 8, 2, 4, '#fbd38d');
+  pixelRect(ctx, 12, 8, 2, 4, '#fbd38d');
+  pixelRect(ctx, 13, 2, 1, 14, '#a0aec0');
+  pixelRect(ctx, 12, 2, 3, 1, '#e2e8f0');
+  return c;
+}
+
+function drawPlayerAttack() {
+  const c = makeCanvas(16, 24);
+  const ctx = c.getContext('2d');
+  pixelRect(ctx, 5, 0, 6, 1, '#4a5568');
+  pixelRect(ctx, 4, 1, 8, 3, '#4a5568');
+  pixelRect(ctx, 4, 4, 8, 1, '#2d3748');
+  pixelRect(ctx, 5, 5, 6, 4, '#fbd38d');
+  putPixel(ctx, 6, 7, '#1a202c');
+  putPixel(ctx, 9, 7, '#1a202c');
+  pixelRect(ctx, 4, 9, 8, 6, '#3182ce');
+  pixelRect(ctx, 7, 10, 2, 4, '#f7e08b');
+  pixelRect(ctx, 4, 15, 8, 1, '#744210');
+  pixelRect(ctx, 4, 16, 3, 4, '#2d3748');
+  pixelRect(ctx, 9, 16, 3, 4, '#2d3748');
+  pixelRect(ctx, 1, 6, 2, 4, '#fbd38d');
+  pixelRect(ctx, 13, 6, 2, 4, '#fbd38d');
+  // Sword swing arc
+  pixelRect(ctx, 14, 0, 1, 20, '#e2e8f0');
+  pixelRect(ctx, 13, 0, 3, 1, '#a0aec0');
+  pixelRect(ctx, 13, 20, 2, 2, '#744210');
+  // Motion effect
+  pixelRect(ctx, 11, 2, 1, 16, '#f7e08b');
+  return c;
+}
+
+// ============ ENEMY SPRITES ============
+function drawSlime() {
+  const c = makeCanvas(28, 24);
+  const ctx = c.getContext('2d');
+  // Body
+  pixelRect(ctx, 6, 14, 16, 8, '#48bb78');
+  pixelRect(ctx, 4, 16, 20, 6, '#48bb78');
+  pixelRect(ctx, 2, 18, 24, 4, '#48bb78');
+  // Top highlight
+  pixelRect(ctx, 8, 12, 12, 3, '#68d391');
+  pixelRect(ctx, 10, 10, 8, 3, '#68d391');
+  // Eyes
+  pixelRect(ctx, 9, 16, 3, 3, '#1a202c');
+  pixelRect(ctx, 16, 16, 3, 3, '#1a202c');
+  pixelRect(ctx, 10, 17, 1, 1, '#fff');
+  pixelRect(ctx, 17, 17, 1, 1, '#fff');
+  // Mouth
+  pixelRect(ctx, 12, 20, 4, 1, '#22543d');
+  // Bottom shadow
+  pixelRect(ctx, 4, 22, 20, 2, '#2f855a');
+  return c;
+}
+
+function drawSkeleton() {
+  const c = makeCanvas(24, 40);
+  const ctx = c.getContext('2d');
+  // Skull
+  pixelRect(ctx, 6, 0, 12, 10, '#e2e8f0');
+  pixelRect(ctx, 6, 10, 12, 2, '#cbd5e0');
+  // Eye sockets
+  pixelRect(ctx, 8, 4, 3, 3, '#1a202c');
+  pixelRect(ctx, 13, 4, 3, 3, '#1a202c');
+  putPixel(ctx, 9, 5, '#e53e3e');
+  putPixel(ctx, 14, 5, '#e53e3e');
+  // Nose
+  putPixel(ctx, 11, 7, '#718096');
+  // Teeth
+  pixelRect(ctx, 9, 9, 6, 1, '#a0aec0');
+  // Ribcage
+  pixelRect(ctx, 7, 12, 10, 4, '#e2e8f0');
+  pixelRect(ctx, 5, 16, 14, 1, '#e2e8f0');
+  pixelRect(ctx, 7, 17, 10, 6, '#e2e8f0');
+  pixelRect(ctx, 7, 19, 10, 1, '#cbd5e0');
+  pixelRect(ctx, 8, 21, 8, 2, '#e2e8f0');
+  // Pelvis
+  pixelRect(ctx, 7, 23, 10, 2, '#cbd5e0');
+  // Legs
+  pixelRect(ctx, 7, 25, 3, 10, '#e2e8f0');
+  pixelRect(ctx, 14, 25, 3, 10, '#e2e8f0');
+  pixelRect(ctx, 7, 35, 3, 3, '#a0aec0');
+  pixelRect(ctx, 14, 35, 3, 3, '#a0aec0');
+  // Arm with sword
+  pixelRect(ctx, 3, 13, 4, 12, '#e2e8f0');
+  pixelRect(ctx, 17, 13, 4, 12, '#e2e8f0');
+  // Sword
+  pixelRect(ctx, 19, 6, 2, 18, '#a0aec0');
+  pixelRect(ctx, 18, 6, 4, 1, '#e2e8f0');
+  pixelRect(ctx, 18, 24, 4, 1, '#744210');
+  pixelRect(ctx, 19, 25, 2, 3, '#744210');
+  return c;
+}
+
+function drawGoblin() {
+  const c = makeCanvas(24, 36);
+  const ctx = c.getContext('2d');
+  // Ears
+  pixelRect(ctx, 3, 4, 3, 4, '#48bb78');
+  pixelRect(ctx, 18, 4, 3, 4, '#48bb78');
+  // Head
+  pixelRect(ctx, 5, 4, 14, 10, '#48bb78');
+  pixelRect(ctx, 5, 14, 14, 2, '#2f855a');
+  // Eyes
+  pixelRect(ctx, 7, 7, 3, 3, '#f7e08b');
+  pixelRect(ctx, 14, 7, 3, 3, '#f7e08b');
+  putPixel(ctx, 8, 8, '#e53e3e');
+  putPixel(ctx, 15, 8, '#e53e3e');
+  // Nose
+  pixelRect(ctx, 10, 10, 4, 2, '#68d391');
+  // Mouth with teeth
+  pixelRect(ctx, 8, 12, 8, 1, '#1a202c');
+  putPixel(ctx, 9, 13, '#fff');
+  putPixel(ctx, 14, 13, '#fff');
+  // Body
+  pixelRect(ctx, 6, 16, 12, 10, '#48bb78');
+  pixelRect(ctx, 8, 17, 8, 1, '#2f855a');
+  // Leather strap
+  pixelRect(ctx, 6, 20, 12, 2, '#744210');
+  pixelRect(ctx, 10, 20, 4, 2, '#d69e2e');
+  // Arms
+  pixelRect(ctx, 3, 17, 3, 8, '#48bb78');
+  pixelRect(ctx, 18, 17, 3, 8, '#48bb78');
+  // Club
+  pixelRect(ctx, 18, 10, 4, 10, '#744210');
+  pixelRect(ctx, 17, 8, 6, 4, '#a0522d');
+  // Legs
+  pixelRect(ctx, 7, 26, 4, 6, '#48bb78');
+  pixelRect(ctx, 13, 26, 4, 6, '#48bb78');
+  pixelRect(ctx, 6, 32, 5, 3, '#2d3748');
+  pixelRect(ctx, 13, 32, 5, 3, '#2d3748');
+  return c;
+}
+
+function drawDarkMage() {
+  const c = makeCanvas(24, 42);
+  const ctx = c.getContext('2d');
+  // Hood
+  pixelRect(ctx, 4, 0, 16, 14, '#553c9a');
+  pixelRect(ctx, 3, 4, 18, 8, '#553c9a');
+  pixelRect(ctx, 5, 12, 14, 3, '#2d3748');
+  // Face in shadow
+  pixelRect(ctx, 7, 8, 10, 6, '#2d3748');
+  // Glowing eyes
+  putPixel(ctx, 9, 10, '#e94560');
+  putPixel(ctx, 14, 10, '#e94560');
+  putPixel(ctx, 9, 11, '#f7e08b');
+  putPixel(ctx, 14, 11, '#f7e08b');
+  // Robe
+  pixelRect(ctx, 3, 14, 18, 20, '#553c9a');
+  pixelRect(ctx, 2, 18, 20, 14, '#6b46c1');
+  pixelRect(ctx, 4, 32, 16, 4, '#553c9a');
+  // Robe highlights
+  pixelRect(ctx, 5, 16, 2, 24, '#6b46c1');
+  pixelRect(ctx, 17, 16, 2, 24, '#6b46c1');
+  // Belt
+  pixelRect(ctx, 5, 24, 14, 2, '#2d3748');
+  pixelRect(ctx, 11, 24, 2, 2, '#d69e2e');
+  // Staff
+  pixelRect(ctx, 1, 6, 2, 30, '#744210');
+  // Staff orb
+  pixelRect(ctx, 0, 2, 4, 4, '#e94560');
+  putPixel(ctx, 1, 3, '#f7e08b');
+  // Hands
+  pixelRect(ctx, 2, 16, 3, 4, '#2d3748');
+  pixelRect(ctx, 19, 16, 3, 4, '#2d3748');
+  return c;
+}
+
+function drawArmoredKnight() {
+  const c = makeCanvas(28, 44);
+  const ctx = c.getContext('2d');
+  // Helmet
+  pixelRect(ctx, 8, 0, 12, 3, '#a0aec0');
+  pixelRect(ctx, 6, 3, 16, 10, '#a0aec0');
+  // Visor slit
+  pixelRect(ctx, 8, 7, 12, 2, '#1a202c');
+  // Cheek guards
+  pixelRect(ctx, 6, 8, 2, 6, '#718096');
+  pixelRect(ctx, 20, 8, 2, 6, '#718096');
+  // Plume
+  pixelRect(ctx, 12, 0, 4, 2, '#e53e3e');
+  pixelRect(ctx, 13, -1, 2, 1, '#e53e3e');
+  // Shoulders/armor
+  pixelRect(ctx, 4, 13, 20, 6, '#a0aec0');
+  pixelRect(ctx, 4, 13, 3, 8, '#718096');
+  pixelRect(ctx, 21, 13, 3, 8, '#718096');
+  // Chest armor
+  pixelRect(ctx, 8, 19, 12, 10, '#cbd5e0');
+  pixelRect(ctx, 9, 20, 10, 8, '#e2e8f0');
+  // Emblem
+  pixelRect(ctx, 12, 22, 4, 4, '#3182ce');
+  pixelRect(ctx, 13, 23, 2, 2, '#90cdf4');
+  // Waist
+  pixelRect(ctx, 8, 29, 12, 3, '#718096');
+  pixelRect(ctx, 12, 29, 4, 3, '#d69e2e');
+  // Leg armor
+  pixelRect(ctx, 8, 32, 5, 10, '#a0aec0');
+  pixelRect(ctx, 15, 32, 5, 10, '#a0aec0');
+  pixelRect(ctx, 8, 42, 5, 2, '#4a5568');
+  pixelRect(ctx, 15, 42, 5, 2, '#4a5568');
+  // Shield (left arm)
+  pixelRect(ctx, 1, 14, 4, 18, '#3182ce');
+  pixelRect(ctx, 2, 15, 2, 16, '#2b6cb0');
+  pixelRect(ctx, 2, 20, 2, 3, '#f7e08b');
+  // Sword (right)
+  pixelRect(ctx, 24, 5, 2, 20, '#e2e8f0');
+  pixelRect(ctx, 23, 5, 4, 2, '#a0aec0');
+  pixelRect(ctx, 23, 25, 4, 2, '#744210');
+  pixelRect(ctx, 24, 27, 2, 3, '#744210');
+  return c;
+}
+
+// ============ BOSS SPRITES ============
+function drawDragonWarrior() {
+  const c = makeCanvas(48, 64);
+  const ctx = c.getContext('2d');
+  // Horns
+  pixelRect(ctx, 14, 0, 4, 6, '#742a2a');
+  pixelRect(ctx, 30, 0, 4, 6, '#742a2a');
+  pixelRect(ctx, 13, 2, 2, 5, '#9b2c2c');
+  pixelRect(ctx, 33, 2, 2, 5, '#9b2c2c');
+  // Head
+  pixelRect(ctx, 12, 4, 24, 16, '#c53030');
+  pixelRect(ctx, 12, 4, 24, 4, '#e53e3e');
+  // Eyes
+  pixelRect(ctx, 16, 10, 4, 4, '#f7e08b');
+  pixelRect(ctx, 28, 10, 4, 4, '#f7e08b');
+  putPixel(ctx, 17, 11, '#e94560');
+  putPixel(ctx, 29, 11, '#e94560');
+  // Fangs/Mouth
+  pixelRect(ctx, 18, 16, 12, 4, '#1a202c');
+  pixelRect(ctx, 20, 18, 2, 3, '#fff');
+  pixelRect(ctx, 26, 18, 2, 3, '#fff');
+  // Scales on neck
+  pixelRect(ctx, 14, 20, 20, 6, '#c53030');
+  pixelRect(ctx, 16, 22, 4, 2, '#e53e3e');
+  pixelRect(ctx, 24, 22, 4, 2, '#e53e3e');
+  // Armor chest
+  pixelRect(ctx, 10, 26, 28, 20, '#742a2a');
+  pixelRect(ctx, 14, 28, 20, 16, '#9b2c2c');
+  // Emblem
+  pixelRect(ctx, 20, 32, 8, 10, '#d69e2e');
+  pixelRect(ctx, 22, 34, 4, 6, '#f7e08b');
+  // Shoulder pads
+  pixelRect(ctx, 4, 26, 8, 12, '#9b2c2c');
+  pixelRect(ctx, 36, 26, 8, 12, '#9b2c2c');
+  pixelRect(ctx, 4, 26, 3, 14, '#742a2a');
+  pixelRect(ctx, 41, 26, 3, 14, '#742a2a');
+  // Arms
+  pixelRect(ctx, 6, 34, 6, 16, '#c53030');
+  pixelRect(ctx, 36, 34, 6, 16, '#c53030');
+  // Dragon claws
+  pixelRect(ctx, 5, 48, 8, 4, '#f7e08b');
+  pixelRect(ctx, 35, 48, 8, 4, '#f7e08b');
+  // Legs
+  pixelRect(ctx, 14, 46, 8, 14, '#c53030');
+  pixelRect(ctx, 26, 46, 8, 14, '#c53030');
+  pixelRect(ctx, 14, 58, 8, 4, '#742a2a');
+  pixelRect(ctx, 26, 58, 8, 4, '#742a2a');
+  // Axe
+  pixelRect(ctx, 42, 10, 2, 40, '#744210');
+  pixelRect(ctx, 38, 8, 10, 10, '#a0aec0');
+  pixelRect(ctx, 40, 6, 6, 4, '#cbd5e0');
+  pixelRect(ctx, 40, 18, 6, 2, '#718096');
+  return c;
+}
+
+function drawShadowLord() {
+  const c = makeCanvas(56, 72);
+  const ctx = c.getContext('2d');
+  // Hood top
+  pixelRect(ctx, 18, 0, 20, 6, '#1a202c');
+  pixelRect(ctx, 14, 4, 28, 10, '#1a202c');
+  pixelRect(ctx, 10, 10, 36, 12, '#2d3748');
+  // Hood shadow
+  pixelRect(ctx, 18, 12, 20, 14, '#0a0e14');
+  // Glowing eyes
+  pixelRect(ctx, 22, 16, 4, 4, '#9f7aea');
+  pixelRect(ctx, 30, 16, 4, 4, '#9f7aea');
+  putPixel(ctx, 23, 17, '#e94560');
+  putPixel(ctx, 31, 17, '#e94560');
+  putPixel(ctx, 23, 18, '#fff');
+  putPixel(ctx, 31, 18, '#fff');
+  // Floating particles
+  putPixel(ctx, 20, 22, '#9f7aea');
+  putPixel(ctx, 34, 22, '#9f7aea');
+  // Robe (wide)
+  pixelRect(ctx, 8, 22, 40, 40, '#2d3748');
+  pixelRect(ctx, 4, 28, 48, 34, '#1a202c');
+  pixelRect(ctx, 2, 34, 52, 28, '#0a0e14');
+  // Robe highlights
+  pixelRect(ctx, 12, 24, 2, 36, '#4a5568');
+  pixelRect(ctx, 42, 24, 2, 36, '#4a5568');
+  pixelRect(ctx, 26, 24, 4, 36, '#4a5568');
+  // Pentagram on robe
+  pixelRect(ctx, 24, 36, 8, 8, '#9f7aea');
+  pixelRect(ctx, 25, 37, 6, 6, '#6b46c1');
+  pixelRect(ctx, 27, 38, 2, 2, '#f7e08b');
+  // Arms
+  pixelRect(ctx, 4, 24, 5, 28, '#1a202c');
+  pixelRect(ctx, 47, 24, 5, 28, '#1a202c');
+  // Ghostly hands
+  pixelRect(ctx, 3, 50, 7, 5, '#4a5568');
+  pixelRect(ctx, 46, 50, 7, 5, '#4a5568');
+  // Staff
+  pixelRect(ctx, 50, 6, 2, 50, '#1a202c');
+  // Staff orb
+  pixelRect(ctx, 48, 2, 6, 8, '#9f7aea');
+  pixelRect(ctx, 49, 3, 4, 6, '#b794f4');
+  putPixel(ctx, 50, 4, '#fff');
+  // Smoke tendrils at bottom
+  pixelRect(ctx, 4, 62, 48, 6, '#2d3748');
+  pixelRect(ctx, 8, 66, 40, 4, '#4a5568');
+  return c;
+}
+
+function drawDemonLord() {
+  const c = makeCanvas(64, 80);
+  const ctx = c.getContext('2d');
+  // Horns
+  pixelRect(ctx, 20, 0, 6, 10, '#2d3748');
+  pixelRect(ctx, 38, 0, 6, 10, '#2d3748');
+  pixelRect(ctx, 19, 2, 3, 8, '#4a5568');
+  pixelRect(ctx, 42, 2, 3, 8, '#4a5568');
+  pixelRect(ctx, 22, -2, 2, 4, '#1a202c');
+  pixelRect(ctx, 40, -2, 2, 4, '#1a202c');
+  // Head
+  pixelRect(ctx, 16, 6, 32, 20, '#c53030');
+  pixelRect(ctx, 16, 6, 32, 6, '#e53e3e');
+  // Eyes
+  pixelRect(ctx, 22, 12, 6, 6, '#f7e08b');
+  pixelRect(ctx, 36, 12, 6, 6, '#f7e08b');
+  pixelRect(ctx, 24, 14, 3, 3, '#e94560');
+  pixelRect(ctx, 37, 14, 3, 3, '#e94560');
+  putPixel(ctx, 25, 15, '#fff');
+  putPixel(ctx, 38, 15, '#fff');
+  // Nose
+  pixelRect(ctx, 29, 18, 6, 5, '#9b2c2c');
+  // Mouth with fangs
+  pixelRect(ctx, 22, 22, 20, 6, '#1a202c');
+  pixelRect(ctx, 24, 24, 3, 5, '#fff');
+  pixelRect(ctx, 37, 24, 3, 5, '#fff');
+  pixelRect(ctx, 30, 26, 4, 2, '#c53030');
+  // Body
+  pixelRect(ctx, 10, 26, 44, 28, '#c53030');
+  pixelRect(ctx, 14, 28, 36, 24, '#e53e3e');
+  // Muscle definition
+  pixelRect(ctx, 16, 34, 12, 12, '#9b2c2c');
+  pixelRect(ctx, 36, 34, 12, 12, '#9b2c2c');
+  // Abs
+  pixelRect(ctx, 24, 32, 16, 2, '#9b2c2c');
+  pixelRect(ctx, 24, 38, 16, 2, '#9b2c2c');
+  pixelRect(ctx, 24, 44, 16, 2, '#9b2c2c');
+  // Belly symbol
+  pixelRect(ctx, 28, 40, 8, 8, '#1a202c');
+  pixelRect(ctx, 29, 41, 6, 6, '#e94560');
+  // Arms (huge)
+  pixelRect(ctx, 2, 28, 10, 30, '#c53030');
+  pixelRect(ctx, 52, 28, 10, 30, '#c53030');
+  pixelRect(ctx, 2, 28, 4, 30, '#9b2c2c');
+  pixelRect(ctx, 58, 28, 4, 30, '#9b2c2c');
+  // Claws
+  pixelRect(ctx, 0, 56, 14, 6, '#f7e08b');
+  pixelRect(ctx, 50, 56, 14, 6, '#f7e08b');
+  pixelRect(ctx, 0, 62, 5, 4, '#fff');
+  pixelRect(ctx, 59, 62, 5, 4, '#fff');
+  // Legs
+  pixelRect(ctx, 18, 54, 10, 20, '#c53030');
+  pixelRect(ctx, 36, 54, 10, 20, '#c53030');
+  pixelRect(ctx, 16, 72, 14, 6, '#9b2c2c');
+  pixelRect(ctx, 34, 72, 14, 6, '#9b2c2c');
+  // Tail
+  pixelRect(ctx, 52, 50, 6, 20, '#9b2c2c');
+  pixelRect(ctx, 56, 48, 4, 10, '#c53030');
+  putPixel(ctx, 60, 46, '#e94560');
+  return c;
+}
+
+// ============ BACKGROUND SPRITES ============
+function drawGrassBackground() {
+  const c = makeCanvas(64, 48);
+  const ctx = c.getContext('2d');
+  // Sky gradient
+  const grad = ctx.createLinearGradient(0, 0, 0, 32);
+  grad.addColorStop(0, '#63b3ed');
+  grad.addColorStop(1, '#bee3f8');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 64, 32);
+  // Distant mountains
+  pixelRect(ctx, 0, 20, 16, 12, '#a0aec0');
+  pixelRect(ctx, 4, 16, 10, 4, '#718096');
+  pixelRect(ctx, 12, 22, 20, 10, '#a0aec0');
+  pixelRect(ctx, 18, 18, 10, 4, '#718096');
+  pixelRect(ctx, 30, 24, 34, 8, '#a0aec0');
+  pixelRect(ctx, 40, 20, 10, 4, '#718096');
+  // Ground grass
+  pixelRect(ctx, 0, 32, 64, 16, '#48bb78');
+  pixelRect(ctx, 0, 32, 64, 2, '#68d391');
+  // Grass blades
+  for (let i = 0; i < 20; i++) {
+    const x = (i * 3 + 1) % 64;
+    const y = 34 + (i % 3) * 2;
+    putPixel(ctx, x, y, '#2f855a');
+    putPixel(ctx, x + 1, y - 1, '#48bb78');
+  }
+  // Flowers
+  pixelRect(ctx, 10, 38, 2, 2, '#f7e08b');
+  pixelRect(ctx, 30, 40, 2, 2, '#e94560');
+  pixelRect(ctx, 50, 36, 2, 2, '#fff');
+  // Trees
+  pixelRect(ctx, 2, 18, 6, 14, '#276749');
+  pixelRect(ctx, 3, 16, 4, 4, '#2f855a');
+  pixelRect(ctx, 4, 12, 2, 6, '#744210');
+  pixelRect(ctx, 54, 14, 8, 18, '#276749');
+  pixelRect(ctx, 55, 12, 6, 4, '#2f855a');
+  pixelRect(ctx, 57, 8, 2, 8, '#744210');
+  return c;
+}
+
+function drawNightBackground() {
+  const c = makeCanvas(64, 48);
+  const ctx = c.getContext('2d');
+  // Night sky
+  const grad = ctx.createLinearGradient(0, 0, 0, 32);
+  grad.addColorStop(0, '#1a202c');
+  grad.addColorStop(1, '#2d3748');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 64, 32);
+  // Stars
+  const stars = [[5,4],[12,8],[20,2],[28,10],[35,6],[42,3],[50,9],[58,5],[8,14],[24,16],[48,14],[15,20],[38,18]];
+  for (const [x, y] of stars) {
+    putPixel(ctx, x, y, '#fff');
+    putPixel(ctx, x, y + 1, '#cbd5e0');
+  }
+  // Moon
+  pixelRect(ctx, 44, 2, 10, 10, '#e2e8f0');
+  pixelRect(ctx, 45, 3, 8, 8, '#cbd5e0');
+  pixelRect(ctx, 46, 4, 3, 3, '#a0aec0');
+  pixelRect(ctx, 50, 6, 3, 3, '#a0aec0');
+  // Ground
+  pixelRect(ctx, 0, 32, 64, 16, '#2d3748');
+  pixelRect(ctx, 0, 32, 64, 2, '#4a5568');
+  // Rocks
+  pixelRect(ctx, 4, 34, 8, 4, '#4a5568');
+  pixelRect(ctx, 50, 36, 10, 4, '#4a5568');
+  // Tree silhouette
+  pixelRect(ctx, 30, 20, 4, 14, '#1a202c');
+  pixelRect(ctx, 26, 16, 12, 8, '#1a202c');
+  pixelRect(ctx, 27, 14, 10, 4, '#1a202c');
+  return c;
+}
+
+function drawHellBackground() {
+  const c = makeCanvas(64, 48);
+  const ctx = c.getContext('2d');
+  // Hell sky
+  const grad = ctx.createLinearGradient(0, 0, 0, 32);
+  grad.addColorStop(0, '#742a2a');
+  grad.addColorStop(1, '#c53030');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 64, 32);
+  // Lava glow
+  pixelRect(ctx, 20, 4, 24, 10, '#f7e08b');
+  pixelRect(ctx, 24, 6, 16, 6, '#fbd38d');
+  // Distant volcanoes
+  pixelRect(ctx, 0, 18, 20, 14, '#2d3748');
+  pixelRect(ctx, 4, 12, 12, 6, '#4a5568');
+  pixelRect(ctx, 10, 8, 4, 6, '#e94560');
+  pixelRect(ctx, 44, 16, 20, 16, '#2d3748');
+  pixelRect(ctx, 48, 10, 12, 6, '#4a5568');
+  pixelRect(ctx, 54, 6, 4, 6, '#e94560');
+  // Ground
+  pixelRect(ctx, 0, 32, 64, 16, '#2d3748');
+  pixelRect(ctx, 0, 32, 64, 2, '#e94560');
+  // Cracks with fire
+  pixelRect(ctx, 8, 36, 12, 1, '#f7e08b');
+  pixelRect(ctx, 28, 38, 8, 1, '#f7e08b');
+  pixelRect(ctx, 44, 36, 14, 1, '#f7e08b');
+  pixelRect(ctx, 10, 37, 2, 2, '#fbd38d');
+  pixelRect(ctx, 30, 39, 2, 2, '#fbd38d');
+  // Flames
+  for (let i = 0; i < 8; i++) {
+    const x = 4 + i * 8;
+    const y = 30 + (i % 2) * 2;
+    putPixel(ctx, x, y, '#f7e08b');
+    putPixel(ctx, x + 1, y - 1, '#e94560');
+  }
+  return c;
+}
+
+// ============ ITEMS & EFFECTS ============
+function drawHealthPotion() {
+  const c = makeCanvas(12, 16);
+  const ctx = c.getContext('2d');
+  // Bottle
+  pixelRect(ctx, 3, 0, 6, 1, '#a0aec0');
+  pixelRect(ctx, 4, 1, 4, 1, '#718096');
+  pixelRect(ctx, 4, 2, 4, 2, '#e2e8f0');
+  // Bottle body
+  pixelRect(ctx, 2, 4, 8, 10, '#e53e3e');
+  pixelRect(ctx, 3, 4, 6, 10, '#f56565');
+  pixelRect(ctx, 3, 5, 2, 8, '#feb2b2');
+  // Liquid
+  pixelRect(ctx, 3, 6, 6, 7, '#c53030');
+  // Shine
+  putPixel(ctx, 4, 5, '#fff');
+  putPixel(ctx, 4, 6, '#feb2b2');
+  // Shadow
+  pixelRect(ctx, 2, 14, 8, 2, '#742a2a');
+  return c;
+}
+
+function drawManaPotion() {
+  const c = makeCanvas(12, 16);
+  const ctx = c.getContext('2d');
+  pixelRect(ctx, 3, 0, 6, 1, '#a0aec0');
+  pixelRect(ctx, 4, 1, 4, 1, '#718096');
+  pixelRect(ctx, 4, 2, 4, 2, '#e2e8f0');
+  pixelRect(ctx, 2, 4, 8, 10, '#3182ce');
+  pixelRect(ctx, 3, 4, 6, 10, '#63b3ed');
+  pixelRect(ctx, 3, 5, 2, 8, '#90cdf4');
+  pixelRect(ctx, 3, 6, 6, 7, '#2b6cb0');
+  putPixel(ctx, 4, 5, '#fff');
+  putPixel(ctx, 4, 6, '#90cdf4');
+  pixelRect(ctx, 2, 14, 8, 2, '#2b6cb0');
+  return c;
+}
+
+function drawCoin() {
+  const c = makeCanvas(12, 12);
+  const ctx = c.getContext('2d');
+  pixelRect(ctx, 2, 2, 8, 8, '#d69e2e');
+  pixelRect(ctx, 3, 1, 6, 1, '#d69e2e');
+  pixelRect(ctx, 1, 3, 1, 6, '#d69e2e');
+  pixelRect(ctx, 10, 3, 1, 6, '#d69e2e');
+  pixelRect(ctx, 3, 10, 6, 1, '#d69e2e');
+  pixelRect(ctx, 3, 3, 6, 6, '#f7e08b');
+  pixelRect(ctx, 4, 4, 4, 4, '#fefcbf');
+  putPixel(ctx, 5, 4, '#fff');
+  putPixel(ctx, 6, 5, '#fff');
+  // Dollar sign
+  pixelRect(ctx, 5, 5, 2, 2, '#b7791f');
+  return c;
+}
+
+function drawFireball() {
+  const c = makeCanvas(16, 16);
+  const ctx = c.getContext('2d');
+  // Outer glow
+  pixelRect(ctx, 2, 2, 12, 12, '#e94560');
+  pixelRect(ctx, 3, 3, 10, 10, '#f56565');
+  // Core fire
+  pixelRect(ctx, 4, 4, 8, 8, '#fbd38d');
+  pixelRect(ctx, 5, 5, 6, 6, '#f7e08b');
+  pixelRect(ctx, 6, 6, 4, 4, '#fff');
+  // Trails
+  putPixel(ctx, 0, 7, '#e94560');
+  putPixel(ctx, 0, 8, '#e94560');
+  putPixel(ctx, 14, 7, '#f7e08b');
+  putPixel(ctx, 15, 8, '#f7e08b');
+  putPixel(ctx, 7, 0, '#e94560');
+  putPixel(ctx, 8, 0, '#e94560');
+  putPixel(ctx, 7, 14, '#f7e08b');
+  putPixel(ctx, 8, 15, '#f7e08b');
+  return c;
+}
+
+function drawDarkBolt() {
+  const c = makeCanvas(16, 16);
+  const ctx = c.getContext('2d');
+  pixelRect(ctx, 2, 2, 12, 12, '#6b46c1');
+  pixelRect(ctx, 3, 3, 10, 10, '#9f7aea');
+  pixelRect(ctx, 4, 4, 8, 8, '#b794f4');
+  pixelRect(ctx, 5, 5, 6, 6, '#e94560');
+  pixelRect(ctx, 6, 6, 4, 4, '#fff');
+  putPixel(ctx, 0, 7, '#9f7aea');
+  putPixel(ctx, 0, 8, '#9f7aea');
+  putPixel(ctx, 14, 7, '#6b46c1');
+  putPixel(ctx, 15, 8, '#6b46c1');
+  putPixel(ctx, 7, 0, '#9f7aea');
+  putPixel(ctx, 8, 0, '#9f7aea');
+  putPixel(ctx, 7, 14, '#6b46c1');
+  putPixel(ctx, 8, 15, '#6b46c1');
+  return c;
+}
+
+// ============ TILES ============
+function drawGrassTile() {
+  const c = makeCanvas(16, 16);
+  const ctx = c.getContext('2d');
+  pixelRect(ctx, 0, 0, 16, 5, '#48bb78');
+  pixelRect(ctx, 0, 0, 16, 2, '#68d391');
+  pixelRect(ctx, 0, 5, 16, 11, '#744210');
+  pixelRect(ctx, 0, 6, 16, 1, '#5f370e');
+  // Grass details
+  putPixel(ctx, 3, 1, '#2f855a');
+  putPixel(ctx, 8, 1, '#2f855a');
+  putPixel(ctx, 13, 2, '#2f855a');
+  // Dirt details
+  putPixel(ctx, 2, 8, '#5f370e');
+  putPixel(ctx, 10, 10, '#5f370e');
+  putPixel(ctx, 6, 13, '#5f370e');
+  return c;
+}
+
+function drawStoneTile() {
+  const c = makeCanvas(16, 16);
+  const ctx = c.getContext('2d');
+  pixelRect(ctx, 0, 0, 16, 16, '#718096');
+  pixelRect(ctx, 0, 0, 16, 2, '#a0aec0');
+  pixelRect(ctx, 0, 14, 16, 2, '#4a5568');
+  // Brick pattern
+  pixelRect(ctx, 7, 2, 1, 5, '#4a5568');
+  pixelRect(ctx, 8, 7, 1, 7, '#4a5568');
+  pixelRect(ctx, 0, 9, 16, 1, '#4a5568');
+  pixelRect(ctx, 3, 2, 1, 5, '#4a5568');
+  pixelRect(ctx, 12, 2, 1, 5, '#4a5568');
+  // Highlights
+  putPixel(ctx, 2, 3, '#cbd5e0');
+  putPixel(ctx, 11, 4, '#cbd5e0');
+  return c;
+}
+
+// ============ GENERATE ALL ============
+function generateAll() {
+  setStatus('正在生成精灵图...');
+  
+  const sprites = {};
+  
+  // Player
+  sprites['player_idle'] = drawPlayerIdle();
+  sprites['player_walk'] = drawPlayerWalk();
+  sprites['player_jump'] = drawPlayerJump();
+  sprites['player_attack'] = drawPlayerAttack();
+  
+  // Enemies
+  sprites['slime'] = drawSlime();
+  sprites['skeleton'] = drawSkeleton();
+  sprites['goblin'] = drawGoblin();
+  sprites['dark_mage'] = drawDarkMage();
+  sprites['armored_knight'] = drawArmoredKnight();
+  
+  // Bosses
+  sprites['dragon_warrior'] = drawDragonWarrior();
+  sprites['shadow_lord'] = drawShadowLord();
+  sprites['demon_lord'] = drawDemonLord();
+  
+  // Backgrounds
+  sprites['bg_grass'] = drawGrassBackground();
+  sprites['bg_night'] = drawNightBackground();
+  sprites['bg_hell'] = drawHellBackground();
+  
+  // Items
+  sprites['health_potion'] = drawHealthPotion();
+  sprites['mana_potion'] = drawManaPotion();
+  sprites['coin'] = drawCoin();
+  sprites['fireball'] = drawFireball();
+  sprites['dark_bolt'] = drawDarkBolt();
+  
+  // Tiles
+  sprites['tile_grass'] = drawGrassTile();
+  sprites['tile_stone'] = drawStoneTile();
+  
+  // Display all
+  document.getElementById('player').innerHTML = '';
+  document.getElementById('enemies').innerHTML = '';
+  document.getElementById('bosses').innerHTML = '';
+  document.getElementById('backgrounds').innerHTML = '';
+  document.getElementById('items').innerHTML = '';
+  
+  for (const [name, canvas] of Object.entries(sprites)) {
+    generatedSprites[name] = canvas;
+    let section = 'player';
+    if (['slime','skeleton','goblin','dark_mage','armored_knight'].includes(name)) section = 'enemies';
+    else if (['dragon_warrior','shadow_lord','demon_lord'].includes(name)) section = 'bosses';
+    else if (name.startsWith('bg_')) section = 'backgrounds';
+    else section = 'items';
+    addSprite(section, name, canvas);
+  }
+  
+  setStatus(`✅ 已生成 ${Object.keys(sprites).length} 个精灵图！点击"下载所有精灵图"保存`);
+}
+
+function downloadAll() {
+  setStatus('正在下载精灵图...');
+  const promises = [];
+  for (const [name, canvas] of Object.entries(generatedSprites)) {
+    const promise = new Promise((resolve) => {
+      canvas.toBlob((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${name}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        resolve();
+      }, 'image/png');
+    });
+    promises.push(promise);
+  }
+  Promise.all(promises).then(() => {
+    setStatus(`✅ 已下载 ${promises.length} 个精灵图！`);
+  });
+}
+
+generateAll();
+</script>
+</body>
+</html>

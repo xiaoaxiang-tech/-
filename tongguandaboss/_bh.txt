@@ -1,0 +1,27 @@
+165: const scenes = this.getLevelScenes()
+168: this.platforms = this.buildScenePlatforms(firstScene, 0)
+171: this.obstacles = this.buildObstacles(firstScene, 0)
+392: private buildObstacles(scene: { id: number; length: number; chests?: ChestConfig[]; obstacles?: ObstacleConfig[] }, offsetX: number): ObstacleData[] {
+619: const scene = this.getActiveScene()
+970: const scene = this.getActiveScene()
+1007: const scenes = this.getLevelScenes()
+1064: const newScene = this.getLevelScenes()[this.activeSceneIndex]
+1066: this.sceneHintText = `进入：${newScene.name} ${BackgroundAnimator.getThemeNameFor(this.getActiveSceneTheme())}`
+1107: private getLevelScenes() {
+1112: private getActiveScene() {
+1113: return this.getLevelScenes()[this.activeSceneIndex]
+1117: private getActiveSceneTheme(): number {
+1118: return this.getActiveScene()?.theme ?? 0
+1124: return this.getLevelScenes()[this.pendingSceneIndex]?.theme ?? 0
+1127: private buildScenePlatforms(scene: { platforms: Platform[]; secretArea?: { platforms?: Platform[] } }, offsetX: number) {
+1133: const scenes = this.getLevelScenes()
+1155: const scenes = this.getLevelScenes()
+1169: this.platforms = this.buildScenePlatforms(scene, this.sceneStartX)
+1171: this.obstacles = this.buildObstacles(scene, this.sceneStartX)
+1341: drawBackground(ctx, this.getActiveSceneTheme(), this.cameraX, this.config.width, this.config.height)
+1353: drawPlatform(ctx, p.x, p.y, p.width, p.height, p.type, this.getActiveSceneTheme())
+1357: const secret = this.getActiveScene()?.secretArea
+1423: const currentScene = this.getActiveScene()
+1566: const themeColor = BackgroundAnimator.getThemeColorFor(this.getActiveSceneTheme())
+1605: const themeColor = BackgroundAnimator.getThemeColorFor(this.getActiveSceneTheme())
+1636: const themeColor = BackgroundAnimator.getThemeColorFor(this.getActiveSceneTheme())

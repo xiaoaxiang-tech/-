@@ -1,0 +1,170 @@
+          color: ringColor,
+          alpha: 1,
+        })
+      }
+    }
+    // T4 二次爆闪
+    if (tier >= 4) {
+      this.particles.emit(x, y, 6, '#fff3c0', { size: 3 })
+    }
+  }
+
+  private processCombat() {
+    // 清除死亡敌人
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const e = this.enemies[i]!
+      if (!e.isAlive) {
+        this.dropItems(e.x + e.width / 2, e.y + e.height / 2, e.config.dropTable)
+        this.player.addExp(e.exp)
+        this.particles.addFloatingText(e.x + e.width / 2, e.y, `+${e.exp}EXP`, '#aaa')
+        // 装备掉落：精英小怪高概率（随关卡进阶），普通小怪低概率
+        const equipChance = e.elite ? 0.9 : 0.05
+        if (Math.random() < equipChance) {
+          this.dropEquip(e.x + e.width / 2, e.y + e.height / 2, Math.max(0, this.currentLevelId))
+        }
+        this.enemies.splice(i, 1)
+      }
+    }
+
+    // 玩家近战
+    if (this.player.attacking && this.player.attackTimer > 4) {
+      const w = this.player.currentWeaponStats
+      const tier = Math.max(0, Math.min(4, this.player.weaponTiers[this.player.currentWeapon] ?? 0))
+      if (w.type === 'sword' || w.type === 'spear') {
+        if (this.player.attackTimer === 6) soundEngine.playWeaponAttack(w.type, tier)
+        const ab = this.player.attackBox
+        for (const enemy of this.enemies) {
+          if (!enemy.isAlive) continue
+          if (this.player.hasHitTarget(enemy)) continue
+          if (PhysicsManager.rectCollide(ab, enemy.rect)) {
+            const dmg = w.damage + this.player.armorAttackBonus + Math.floor(this.player.attack * 0.25) + Math.floor(Math.random() * 8)
+            enemy.takeDamage(dmg)
+            this.meleeHitEffect(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2)
+            this.particles.addFloatingText(enemy.x + enemy.width / 2, enemy.y, `-${dmg}`, '#ffd700')
+            this.player.markHit(enemy)
+            soundEngine.playEnemyHit()
+          }
+        }
+        if (this.boss?.isAlive && !this.player.hasHitTarget(this.boss) && PhysicsManager.rectCollide(ab, this.boss.rect)) {
+          const dmg = w.damage + this.player.armorAttackBonus + Math.floor(this.player.attack * 0.25) + Math.floor(Math.random() * 6)
+          this.boss.takeDamage(dmg)
+          this.meleeHitEffect(this.boss.x + this.boss.width / 2, this.boss.y + this.boss.height / 2)
+          this.particles.addFloatingText(this.boss.x + this.boss.width / 2, this.boss.y, `-${dmg}`, '#ffd700')
+          this.player.markHit(this.boss); this.shake(3)
+        }
+
+        // 近战攻击可开箱
+        for (const chest of this.chests) {
+          if (chest.opened) continue
+          const chestRect = { x: chest.x - chest.w / 2, y: chest.y - chest.h, width: chest.w, height: chest.h }
+          if (PhysicsManager.rectCollide(ab, chestRect)) this.openChest(chest)
+        }
+      }
+      // 远程武器开火
+      if ((w.type === 'bow' || w.type === 'gun') && this.player.attackTimer === 5) {
+        const tier = this.player.weaponTiers[w.type] ?? 0
+        soundEngine.playWeaponAttack(w.type, tier)
+        const mx = this.player.x + this.player.width / 2 + (this.player.dir === 'right' ? 20 : -20)
+        const my = this.player.y + this.player.height / 2 - 5
+        // 开火粒子（枪口/弓前火花，随阶数增多）
+        this.particles.emit(mx, my, 3 + tier * 2, w.type === 'gun' ? '#ffaa00' : '#7ee8b8', { size: 2 + tier * 0.4 })
+        for (let i = 0; i < w.projectileCount; i++) {
+          const spr = w.projectileCount > 1 ? (i - (w.projectileCount - 1) / 2) * 1.5 : 0
+          this.projectiles.push(createProjectile(
+            this.player.x + this.player.width / 2, this.player.y + this.player.height / 2 - 5 + spr,
+            this.player.dir === 'right' ? w.projectileSpeed : -w.projectileSpeed, spr,
+            w.type === 'gun' ? 'bullet' : 'arrow', w.damage + this.player.armorAttackBonus + Math.floor(this.player.attack * 0.15) + Math.floor(Math.random() * 5),
+            this.player.dir, 'player', 80, tier))
+        }
+      }
+    }
+
+    // 技能1
+    this.processSkill1()
+
+    // 技能2
+    this.processSkill2()
+
+    // 大招
+    this.processUltimate()
+
+    // 敌人攻击玩家
+    for (const enemy of this.enemies) {
+      if (enemy.wantsToAttack(this.player.x, this.player.y, this.player.rect)) {
+        const dmg = this.player.takeDamage(enemy.getAttackDamage())
+        if (dmg) {
+          this.particles.addFloatingText(this.player.x + this.player.width / 2, this.player.y, `-${dmg}`, '#f44')
+          this.shake(2)
+          soundEngine.playPlayerHurt()
+        }
+      }
+    }
+
+    // 敌人远程
+    for (const enemy of this.enemies) {
+      if (enemy.wantsToShoot) {
+        this.projectiles.push(createProjectile(
+          enemy.x + enemy.width / 2, enemy.y + enemy.height / 2,
+          enemy.dir === 'right' ? 5 : -5, 0, enemy.config.type === 'dark_mage' ? 'dark' : 'magic',
+          enemy.config.attack, enemy.dir, 'enemy', 100))
+      }
+    }
+
+    // Boss攻击
+    if (this.boss?.isAlive) {
+      this.processBossAttacks()
+    }
+  }
+
+  private processSkill1() {
+    const cd = this.player.skill1Cooldown
+    if (cd <= 0 || cd < this.player.skill1MaxCD - 2) return
+    const ws = this.player.currentWeaponStats
+    const tier = this.player.weaponTiers[this.player.currentWeapon] ?? 0
+    const cx = this.player.x + this.player.width / 2
+    const cy = this.player.y + this.player.height / 2
+    if (ws.type === 'sword') {
+      this.projectiles.push(createProjectile(cx, cy - 5, this.player.dir === 'right' ? 8 : -8, 0, 'magic', ws.damage * 2, this.player.dir, 'player', 60, tier))
+    } else if (ws.type === 'gun') {
+      for (let i = 0; i < 5; i++) {
+        this.projectiles.push(createProjectile(cx, cy, (i - 2) * 2 + (this.player.dir === 'right' ? 6 : -6), (i - 2) * 1.5 - 2, 'fire', ws.damage * 1.5, this.player.dir, 'player', 50, tier))
+      }
+    } else if (ws.type === 'bow') {
+      for (let i = 0; i < 5; i++) {
+        this.projectiles.push(createProjectile(cx, cy - 10 + (i - 2) * 4, this.player.dir === 'right' ? 10 : -10, (i - 2) * 1.5, 'arrow', ws.damage * 1.8, this.player.dir, 'player', 80, tier))
+      }
+    } else {
+      this.projectiles.push(createProjectile(cx, cy - 5, this.player.dir === 'right' ? 12 : -12, 0, 'magic', ws.damage * 2.5, this.player.dir, 'player', 40, tier))
+    }
+  }
+
+  private processSkill2() {
+    const cd = this.player.skill2Cooldown
+    if (cd <= 0 || cd < this.player.skill2MaxCD - 2) return
+    const ws = this.player.currentWeaponStats
+    const cx = this.player.x + this.player.width / 2
+    const cy = this.player.y + this.player.height / 2
+    this.particles.emit(cx, cy, 20, ws.type === 'gun' ? '#ff4400' : '#00aaff')
+    for (const enemy of this.enemies) {
+      if (!enemy.isAlive) continue
+      const dist = Math.hypot(enemy.x + enemy.width / 2 - cx, enemy.y + enemy.height / 2 - cy)
+      if (dist < 120) {
+        const dmg = ws.damage * 1.5 + Math.floor(Math.random() * 10)
+        enemy.takeDamage(dmg)
+        this.particles.addFloatingText(enemy.x + enemy.width / 2, enemy.y, `-${dmg}`, '#0ff')
+      }
+    }
+    if (this.boss?.isAlive) {
+      const dist = Math.hypot(this.boss.x + this.boss.width / 2 - cx, this.boss.y + this.boss.height / 2 - cy)
+      if (dist < 150) {
+        const dmg = ws.damage * 1.5 + Math.floor(Math.random() * 8)
+        this.boss.takeDamage(dmg)
+        this.shake(4)
+      }
+    }
+  }
+
+  private processUltimate() {
+    const cd = this.player.ultimateCooldown
+    if (cd <= 0 || cd < this.player.ultimateMaxCD - 2) return
+    const ws = this.player.currentWeaponStats

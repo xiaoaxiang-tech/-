@@ -1,0 +1,5 @@
+1147: export function generateAllSpriteSheets(): void {
+1166: sheetCache.set('dragon_warrior', genGrasslandGuardian())
+1167: sheetCache.set('shadow_lord', genShadowWolfKing())
+1168: sheetCache.set('demon_lord', genMagmaDemonLord())
+1171: export function getSpriteSheet(key: string): SpriteSheet | undefined {

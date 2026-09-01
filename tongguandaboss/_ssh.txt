@@ -1,0 +1,24 @@
+8: frameCount: number
+31: function drawPlayerBase(ctx: CanvasRenderingContext2D, ox: number, oy: number, pose: {
+106: return { canvas: cvs, frameWidth: FW, frameHeight: FH, frameCount: FC }
+128: return { canvas: cvs, frameWidth: FW, frameHeight: FH, frameCount: FC }
+173: return { canvas: cvs, frameWidth: FW, frameHeight: FH, frameCount: FC }
+197: return { canvas: cvs, frameWidth: FW, frameHeight: FH, frameCount: FC }
+232: return { canvas: cvs, frameWidth: FW, frameHeight: FH, frameCount: FC }
+266: return { canvas: cvs, frameWidth: FW, frameHeight: FH, frameCount: FC }
+302: return { canvas: cvs, frameWidth: FW, frameHeight: FH, frameCount: FC }
+350: return { canvas: cvs, frameWidth: FW, frameHeight: FH, frameCount: FC }
+387: return { canvas: cvs, frameWidth: FW, frameHeight: FH, frameCount: FC }
+505: return { canvas: cvs, frameWidth: FW, frameHeight: FH, frameCount: FC }
+651: return { canvas: cvs, frameWidth: FW, frameHeight: FH, frameCount: FC }
+872: return { canvas: cvs, frameWidth: FW, frameHeight: FH, frameCount: FC }
+912: return { canvas: cvs, frameWidth: FW, frameHeight: FH, frameCount: FC }
+953: return { canvas: cvs, frameWidth: FW, frameHeight: FH, frameCount: FC }
+995: return { canvas: cvs, frameWidth: FW, frameHeight: FH, frameCount: FC }
+1035: return { canvas: cvs, frameWidth: FW, frameHeight: FH, frameCount: FC }
+1094: return { canvas: cvs, frameWidth: FW, frameHeight: FH, frameCount: FC }
+1142: return { canvas: cvs, frameWidth: FW, frameHeight: FH, frameCount: FC }
+1147: export function generateAllSpriteSheets(): void {
+1166: sheetCache.set('dragon_warrior', genGrasslandGuardian())
+1167: sheetCache.set('shadow_lord', genShadowWolfKing())
+1168: sheetCache.set('demon_lord', genMagmaDemonLord())

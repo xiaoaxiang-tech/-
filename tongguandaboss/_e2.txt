@@ -1,0 +1,160 @@
+
+  // AI
+  private behavior: EnemyConfig['behavior']
+  private aiTimer: number = 0
+  private patrolDir: number = 1
+  private patrolTimer: number = 0
+  private attackTimer: number = 0
+  private stunTimer: number = 0
+  private chargeTimer: number = 0
+  onGround: boolean = false
+
+  // 动画
+  animFrame: number = 0
+  animDir: number = 1
+  private hitFlash: number = 0
+
+  // 暗法师专属
+  private shootTimer: number = 0
+  wantsToShoot: boolean = false
+
+  // 重甲骑士
+  private blockTimer: number = 0
+
+  /** 根据基础配置构建精英配置（不污染原共享配置） */
+  static buildEliteConfig(config: EnemyConfig): EnemyConfig {
+    return {
+      ...config,
+      name: `精英·${config.name}`,
+      hp: Math.round(config.hp * 3),
+      attack: Math.round(config.attack * 1.5),
+      speed: config.speed * 1.2,
+      width: config.width + 10,
+      height: config.height + 10,
+      exp: config.exp * 3,
+      dropTable: [
+        ...config.dropTable,
+        { item: 'coin_gold', chance: 0.9 },
+        { item: 'health', chance: 0.7 },
+        { item: 'mana', chance: 0.5 }
+      ]
+    }
+  }
+
+  constructor(config: EnemyConfig, x: number, y: number, elite: boolean = false) {
+    this.elite = elite
+    const cfg = elite ? Enemy.buildEliteConfig(config) : config
+    this.config = cfg
+    this.x = x
+    this.y = y
+    this.hp = cfg.hp
+    this.maxHp = cfg.hp
+    this.attack = cfg.attack
+    this.speed = cfg.speed
+    this.width = cfg.width
+    this.height = cfg.height
+    this.exp = cfg.exp
+    this.behavior = cfg.behavior
+  }
+
+  get rect(): Rect {
+    return { x: this.x, y: this.y, width: this.width, height: this.height }
+  }
+
+  update(playerX: number, playerY: number, platforms: Array<{ x: number; y: number; width: number; height: number }>) {
+    if (!this.isAlive) return
+    if (this.stunTimer > 0) { this.stunTimer--; return }
+    if (this.hitFlash > 0) this.hitFlash--
+
+    this.aiTimer++
+    this.animFrame += 0.15
+    const dx = playerX - this.x
+    const dy = playerY - this.y
+    this.dir = dx > 0 ? 'right' : 'left'
+
+    switch (this.behavior) {
+      case 'chase': this.chaseBehavior(dx, dy); break
+      case 'patrol': this.patrolBehavior(dx, dy, platforms); break
+      case 'ranged': this.rangedBehavior(dx, dy); break
+      case 'charge': this.chargeBehavior(dx, dy); break
+      case 'tank': this.tankBehavior(dx, dy); break
+    }
+
+    // 重力
+    this.vy += 0.8
+    if (this.vy > 12) this.vy = 12
+    this.x += this.vx
+    this.y += this.vy
+    this.onGround = false
+
+    // 平台碰撞
+    const enemyBottom = this.y + this.height
+    const enemyTop = this.y
+
+    for (const p of platforms) {
+      if (this.aabbCollide(p)) {
+        // 垂直碰撞
+        if (this.vy > 0) {
+          this.y = p.y - this.height
+          this.vy = 0
+          this.onGround = true
+        } else if (this.vy < 0) {
+          this.y = p.y + p.height
+          this.vy = 0
+        }
+        // 水平碰撞：只对和敌人身体高度相交的平台做碰撞
+        if (this.vx !== 0) {
+          const platTop = p.y
+          const platBottom = p.y + p.height
+          // 跳过脚下的地面和头顶的台子
+          if (enemyBottom > platTop + 4 && enemyTop < platBottom - 2) {
+            if (this.vx > 0) { this.x = p.x - this.width; this.vx = 0; this.patrolDir = -1 }
+            else if (this.vx < 0) { this.x = p.x + p.width; this.vx = 0; this.patrolDir = 1 }
+          }
+        }
+      }
+    }
+
+    if (this.y > 700) { this.y = 700; this.vy = 0; this.onGround = true }
+  }
+
+  private chaseBehavior(dx: number, _dy: number) {
+    this.vx = dx > 0 ? this.speed : -this.speed
+    if (Math.abs(dx) < 20) this.vx = 0
+  }
+
+  private patrolBehavior(dx: number, _dy: number, _platforms: Array<any>) {
+    // 巡逻中检测到玩家
+    if (Math.abs(dx) < 200) {
+      this.vx = dx > 0 ? this.speed : -this.speed
+      this.patrolTimer = 0
+    } else {
+      this.patrolTimer++
+      if (this.patrolTimer > 120) {
+        this.patrolDir *= -1
+        this.patrolTimer = 0
+      }
+      this.vx = this.patrolDir * this.speed * 0.5
+    }
+  }
+
+  private rangedBehavior(dx: number, _dy: number) {
+    // 保持距离
+    const idealDist = 150 + Math.random() * 50
+    if (Math.abs(dx) > idealDist) {
+      this.vx = dx > 0 ? this.speed : -this.speed
+    } else if (Math.abs(dx) < idealDist - 40) {
+      this.vx = dx > 0 ? -this.speed : this.speed
+    } else {
+      this.vx = 0
+    }
+
+    // 射击
+    this.shootTimer++
+    if (Math.abs(dx) < 350 && this.shootTimer > 80) {
+      this.wantsToShoot = true
+      this.shootTimer = 0
+    } else {
+      this.wantsToShoot = false
+    }
+  }

@@ -1,0 +1,320 @@
+    this.player.addExp(3)
+    this.syncEquipment()
+  }
+
+  /** 装备栏手动切换武器 */
+  equipWeapon(type: WeaponType, tier: number) {
+    this.player.equipWeapon(type, tier)
+    const stats = this.player.equippedWeapons[type]
+    if (this.player.currentWeapon === type) this.player.currentWeaponStats = stats
+    this.particles.addFloatingText(this.player.x + 16, this.player.y - 20, `装备 ${stats.name}`, '#ffd700')
+    this.syncEquipment()
+    this.onEquipmentChange?.({
+      kind: 'weapon', slot: 'weapon', weaponType: type,
+      name: stats.name, tier, equipped: true, levelId: this.currentLevelId
+    })
+  }
+
+  /** 装备栏手动切换护甲 */
+  equipArmor(tier: number) {
+    this.player.equipArmor(tier)
+    const spec = this.player.armorSlot
+    if (spec) {
+      this.particles.addFloatingText(this.player.x + 16, this.player.y - 20, `装备 ${spec.name}`, spec.color)
+      this.syncEquipment()
+      this.onEquipmentChange?.({
+        kind: 'armor', slot: 'armor', name: spec.name, tier, equipped: true, levelId: this.currentLevelId
+      })
+    }
+  }
+
+  /** 将当前装备进度写回全局（供 gameStore 持久化 / 跨关卡应用） */
+  syncEquipment() {
+    const state: EquipState = {
+      weaponTiers: { ...this.player.weaponTiers },
+      weaponInventories: Object.fromEntries(
+        (Object.keys(this.player.weaponInventory) as WeaponType[]).map(k => [k, [...this.player.weaponInventory[k]!]])
+      ) as Record<WeaponType, number[]>,
+      armorTier: this.player.armorSlot?.tier ?? -1,
+      armorInventory: [...this.player.armorInventory]
+    }
+    ;(window as any).__equipState = state
+  }
+
+  shake(intensity: number) {
+    this.shakeTime = 10
+    this.shakeIntensity = Math.max(this.shakeIntensity, intensity)
+  }
+
+  draw(ctx: CanvasRenderingContext2D) {
+    // 游戏未初始化（菜单状态）时跳过绘制
+    if (!this.levelConfig) return
+
+    const sx = this.shakeTime > 0 ? (Math.random() - 0.5) * this.shakeIntensity * 2 : 0
+    const sy = this.shakeTime > 0 ? (Math.random() - 0.5) * this.shakeIntensity : 0
+
+    // 第一层：背景 + 世界对象 + UI
+    ctx.save()
+    ctx.translate(sx, sy)
+
+    // 背景（屏幕空间，使用cameraX做视差滚动）——按当前场景主题绘制
+    drawBackground(ctx, this.getActiveSceneTheme(), this.cameraX, this.config.width, this.config.height)
+
+    // 动态背景前景粒子
+    this.bgAnimator.drawForeground(ctx, this.config.width, this.config.height)
+
+    // 保存shake状态，进入世界坐标
+    ctx.save()
+    ctx.translate(-this.cameraX, 0)
+
+    // 平台
+    for (const p of this.platforms) {
+      if (p.x + p.width < this.cameraX - 100 || p.x > this.cameraX + this.config.width + 100) continue
+      drawPlatform(ctx, p.x, p.y, p.width, p.height, p.type, this.getActiveSceneTheme())
+    }
+
+    // 秘密通道入口光柱标记
+    const secret = this.getActiveScene()?.secretArea
+    if (secret) {
+      const sx = this.sceneStartX + secret.entranceX
+      if (sx > this.cameraX - 80 && sx < this.cameraX + this.config.width + 80) {
+        const pulse = Math.sin(Date.now() * 0.008)
+        ctx.save()
+        ctx.globalAlpha = 0.22 + pulse * 0.12
+        ctx.fillStyle = '#c39bd3'
+        ctx.fillRect(sx - 10, this.config.groundY - 280, 20, 280)
+        // 入口箭头（向下指向隐藏入口）
+        ctx.globalAlpha = 0.55 + pulse * 0.3
+        ctx.fillStyle = '#e8d5f5'
+        ctx.beginPath()
+        ctx.moveTo(sx, this.config.groundY - 300)
+        ctx.lineTo(sx - 9, this.config.groundY - 288)
+        ctx.lineTo(sx + 9, this.config.groundY - 288)
+        ctx.closePath()
+        ctx.fill()
+        ctx.restore()
+      }
+    }
+
+    // 可交互障碍物（木箱 / 尖刺 / 炸药桶）
+    for (const ob of this.obstacles) {
+      if (ob.x < this.cameraX - 80 || ob.x > this.cameraX + this.config.width + 80) continue
+      drawObstacleSprite(ctx, ob.x, ob.y, ob.w, ob.h, ob.type, Math.floor(Date.now() / 100), ob.hitFlash > 0)
+    }
+
+    // 物品
+    for (const item of this.items) {
+      if (item.x < this.cameraX - 50 || item.x > this.cameraX + this.config.width + 50) continue
+      // 装备掉落光柱：让玩家一眼看到新装备
+      if (item.type === 'equip' && item.equip) {
+        const pulse = 0.25 + Math.sin(Date.now() * 0.008 + item.x) * 0.12
+        ctx.save()
+        ctx.globalAlpha = pulse
+        ctx.fillStyle = item.equip.color
+        ctx.fillRect(item.x - 2, item.y - 60, 4, 60)
+        ctx.restore()
+      }
+      drawItemSprite(ctx, item.x, item.y, item.w, item.h, item.type, Math.floor(Date.now() / 100), item.equip)
+    }
+
+    // 宝箱
+    for (const chest of this.chests) {
+      if (chest.x < this.cameraX - 60 || chest.x > this.cameraX + this.config.width + 60) continue
+      drawChestSprite(ctx, chest.x, chest.y, chest.w, chest.h, chest.type, chest.opened, chest.opened ? chest.openTimer : Math.floor(Date.now() / 100))
+    }
+
+    // 敌人
+    for (const enemy of this.enemies) {
+      if (enemy.x < this.cameraX - 100 || enemy.x > this.cameraX + this.config.width + 100) continue
+      enemy.draw(ctx)
+    }
+
+    // 投射物
+    for (const p of this.projectiles) {
+      if (p.x < this.cameraX - 50 || p.x > this.cameraX + this.config.width + 50) continue
+      drawProjectileData(ctx, p)
+    }
+
+    // Boss
+    if (this.boss?.isAlive) {
+      this.boss.draw(ctx)
+    }
+
+    const currentScene = this.getActiveScene()
+    if (!currentScene) return
+    const gateX = this.sceneStartX + currentScene.length - 140
+    const gateY = this.config.groundY - 140
+    const gateOpen = this.sceneCleared && this.player.x >= gateX - 120
+    ctx.save()
+    ctx.fillStyle = '#0f172a'
+    ctx.fillRect(gateX, gateY, 56, 140)
+    ctx.fillStyle = gateOpen ? '#8ef1ff' : '#5a4d2a'
+    ctx.fillRect(gateX + 10, gateY + 10, 36, 120)
+    ctx.fillStyle = '#ffd166'
+    ctx.fillRect(gateX + 16, gateY + 16, 24, 24)
+    ctx.fillStyle = gateOpen ? '#ffffff' : '#fbbf24'
+    ctx.fillRect(gateX + 18, gateY + 54, 20, 50)
+    ctx.restore()
+
+    if (this.sceneCleared) {
+      ctx.save()
+      ctx.strokeStyle = gateOpen ? '#8ef1ff' : '#fbbf24'
+      ctx.lineWidth = 3
+      ctx.beginPath()
+      ctx.moveTo(gateX + 10, gateY + 10)
+      ctx.lineTo(gateX + 46, gateY + 10)
+      ctx.lineTo(gateX + 46, gateY + 130)
+      ctx.lineTo(gateX + 10, gateY + 130)
+      ctx.stroke()
+      ctx.restore()
+    }
+
+    // 玩家
+    this.player.draw(ctx)
+
+    // 宠物
+    if (this.petEntity) {
+      drawPet(ctx, this.petEntity)
+    }
+
+    // 粒子
+    this.particles.draw(ctx)
+
+    // 回到shake空间（屏幕坐标）
+    ctx.restore()
+
+    // ====== 场景过渡动画覆盖层 ======
+    if (this.sceneTransitionPhase !== 'idle') {
+      this.drawSceneTransition(ctx)
+    }
+
+    // 场景提示文字（非过渡期间也显示）
+    ctx.save()
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'
+    ctx.fillRect(260, 24, this.config.width - 520, 48)
+    ctx.fillStyle = '#fff'
+    ctx.font = 'bold 24px monospace'
+    ctx.textAlign = 'center'
+    ctx.fillText(this.sceneHintText, this.config.width / 2, 56)
+    ctx.restore()
+
+    // Boss警告（屏幕固定位置）
+    if (this.bossWarningTimer > 0 && this.boss) {
+      ctx.fillStyle = `rgba(255,0,0,${0.3 + Math.sin(Date.now() * 0.01) * 0.2})`
+      ctx.fillRect(0, 0, this.config.width, this.config.height)
+      ctx.fillStyle = '#ff0'
+      ctx.font = 'bold 32px monospace'
+      ctx.textAlign = 'center'
+      ctx.fillText(`⚠ ${this.boss.config.name} 出现了！⚠`, this.config.width / 2, this.config.height / 2 - 40)
+      if (this.bossWarningTimer === 85) soundEngine.playBossRoar()
+    }
+
+    // Boss血条（屏幕固定位置）
+    if (this.boss?.isAlive && this.bossSpawned) {
+      ctx.fillStyle = '#000'
+      ctx.fillRect(200, 30, this.config.width - 400, 24)
+      ctx.fillStyle = '#400'
+      ctx.fillRect(202, 32, this.config.width - 404, 20)
+      const hpR = this.boss.hp / this.boss.maxHp
+      const hpColor = hpR > 0.5 ? '#4f4' : hpR > 0.25 ? '#ff0' : '#f44'
+      ctx.fillStyle = hpColor
+      ctx.fillRect(202, 32, (this.config.width - 404) * hpR, 20)
+      ctx.fillStyle = '#fff'
+      ctx.font = 'bold 14px monospace'
+      ctx.textAlign = 'center'
+      ctx.fillText(`${this.boss.config.name} | ${this.boss.hp}/${this.boss.maxHp}`, this.config.width / 2, 47)
+    }
+
+    // 调试：输入状态 + 玩家信息
+    const inp = this.getInputState()
+    ctx.font = '10px monospace'
+    ctx.textAlign = 'left'
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'
+    ctx.fillRect(5, this.config.height - 45, 230, 40)
+    ctx.fillStyle = '#0f0'
+    const l = inp.left ? '←' : ' '
+    const r = inp.right ? '→' : ' '
+    const j = inp.jump ? 'JUMP' : '   '
+    const a = inp.attack ? 'ATK' : '   '
+    ctx.fillText(`[${l}${r}] ${j} ${a} | X:${Math.floor(this.player.x)} Y:${Math.floor(this.player.y)} GND:${this.player.onGround}`, 10, this.config.height - 30)
+    ctx.fillText(`State:${this.state} Wave:${this.waveIndex}/${this.levelConfig?.waves.length||0}`, 10, this.config.height - 15)
+
+    ctx.restore()
+  }
+
+  // ====== 绘制场景过渡动画覆盖层 ======
+  private drawSceneTransition(ctx: CanvasRenderingContext2D) {
+    const W = this.config.width
+    const H = this.config.height
+    const alpha = this.transitionAlpha
+
+    // 全屏渐变遮罩
+    if (this.sceneTransitionPhase === 'fadeout') {
+      // 淡出：从边缘向中心收缩的暗角效果 + 粒子汇聚感
+      // 暗角 vignette
+      const grad = ctx.createRadialGradient(W / 2, H / 2, W * 0.3, W / 2, H / 2, W * 0.7)
+      grad.addColorStop(0, `rgba(0,0,0,${alpha * 0.4})`)
+      grad.addColorStop(1, `rgba(0,0,0,${alpha})`)
+      ctx.fillStyle = grad
+      ctx.fillRect(0, 0, W, H)
+
+      // 扫描线效果（从上往下扫）
+      const scanY = (this.sceneTransitionTimer / 30) * H
+      ctx.fillStyle = `rgba(0,0,10,${alpha * 0.6})`
+      ctx.fillRect(0, scanY - 8, W, 16)
+
+      // 边缘光晕
+      const themeColor = BackgroundAnimator.getThemeColorFor(this.getPendingSceneTheme())
+      ctx.strokeStyle = themeColor
+      ctx.lineWidth = 3
+      ctx.globalAlpha = alpha * 0.7
+      ctx.strokeRect(4, 4, W - 8, H - 8)
+      ctx.globalAlpha = 1
+
+    } else if (this.sceneTransitionPhase === 'hold') {
+      // 保持：全黑 + 场景名称展示
+      ctx.fillStyle = '#000'
+      ctx.fillRect(0, 0, W, H)
+
+      // 中央场景名称
+      if (this.sceneHintText) {
+        ctx.save()
+        // 发光文字背景条
+        ctx.fillStyle = 'rgba(20,20,40,0.9)'
+        ctx.fillRect(W / 2 - 220, H / 2 - 30, 440, 60)
+        // 边框发光
+        const themeColor = BackgroundAnimator.getThemeColorFor(this.getActiveSceneTheme())
+        ctx.strokeStyle = themeColor
+        ctx.lineWidth = 2
+        ctx.globalAlpha = 0.5 + Math.sin(Date.now() * 0.006) * 0.3
+        ctx.strokeRect(W / 2 - 220, H / 2 - 30, 440, 60)
+        ctx.globalAlpha = 1
+
+        // 文字
+        ctx.font = 'bold 26px "Microsoft YaHei", sans-serif'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+
+        // 文字阴影/发光
+        ctx.shadowColor = themeColor
+        ctx.shadowBlur = 15
+        ctx.fillStyle = '#fff'
+        ctx.fillText(this.sceneHintText, W / 2, H / 2)
+        ctx.shadowBlur = 0
+
+        // 副标题
+        ctx.font = '14px monospace'
+        ctx.fillStyle = 'rgba(255,255,255,0.5)'
+        ctx.fillText('— 正在加载新区域 —', W / 2, H / 2 + 22)
+
+        ctx.restore()
+      }
+
+      // 四角传送门能量纹路
+      this.drawPortalEnergy(ctx, W, H)
+
+    } else if (this.sceneTransitionPhase === 'fadein') {
+      // 淡入：从中心向外扩散的光芒
+      const progress = 1 - alpha // 0→1
+
+      // 背景遮罩逐渐消失

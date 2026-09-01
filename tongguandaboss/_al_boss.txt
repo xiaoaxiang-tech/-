@@ -1,0 +1,129 @@
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number,
+  bossName: string, phase: number,
+  animFrame: number, attacking: boolean
+) {
+  // === 精灵图帧动画 ===
+  let sheetKey = 'dragon_warrior'
+  if (bossName.includes('草原') || bossName.includes('龙人')) sheetKey = 'dragon_warrior'
+  else if (bossName.includes('暗影') || bossName.includes('狼王')) sheetKey = 'shadow_lord'
+  else if (bossName.includes('魔王') || bossName.includes('熔岩')) sheetKey = 'demon_lord'
+  else if (bossName.includes('霜') || bossName.includes('冰') || bossName.includes('凛')) sheetKey = 'frost_giant'
+  else if (bossName.includes('深渊') || bossName.includes('灭世')) sheetKey = 'abyss_lord'
+
+  const sheet = getSpriteSheet(sheetKey)
+  if (sheet) {
+    ctx.save()
+    // 精灵表支持攻击帧段（前一半待机 / 后一半出招动作）时，出招切换到攻击帧
+    const hasAttackFrames = sheet.frameCount >= 8
+    const segBase = hasAttackFrames && attacking ? Math.floor(sheet.frameCount / 2) : 0
+    const segLen = hasAttackFrames ? Math.floor(sheet.frameCount / 2) : sheet.frameCount
+    const animSpeed = hasAttackFrames && attacking ? 0.3 : 0.2
+    const frameIdx = segBase + Math.floor(animFrame * animSpeed) % segLen
+    const sx = frameIdx * sheet.frameWidth
+    // 按 sheet 的宽高比缩放到 boss 大小
+    const scale = Math.min(w / sheet.frameWidth, h / sheet.frameHeight)
+    const dw = sheet.frameWidth * scale
+    const dh = sheet.frameHeight * scale
+    const padX = (w - dw) / 2
+    const padY = (h - dh) / 2
+    ctx.drawImage(
+      sheet.canvas,
+      sx, 0, sheet.frameWidth, sheet.frameHeight,
+      x + padX, y + padY, dw, dh
+    )
+
+    // 阶段 2+ 添加愤怒光环
+    if (phase >= 2) {
+      ctx.globalAlpha = 0.3 + Math.sin(animFrame * 0.1) * 0.2
+      ctx.fillStyle = bossName.includes('熔岩') || bossName.includes('魔王') ? '#ff4400'
+        : bossName.includes('暗影') || bossName.includes('狼王') ? '#6600cc'
+        : bossName.includes('霜') || bossName.includes('冰') || bossName.includes('凛') ? '#66ccff'
+        : bossName.includes('深渊') || bossName.includes('灭世') ? '#ff4080'
+        : '#44cc44'
+      ctx.fillRect(x - 5, y - 5, w + 10, h + 10)
+      ctx.globalAlpha = 1
+    }
+    ctx.restore()
+    drawBossAura(ctx, x, y, w, h, phase, animFrame, attacking)
+    return
+  }
+
+  // 单图精灵图回退
+  const spriteKey = sheetKey
+  const sprite = imageCache.get(spriteKey)
+  if (sprite && sprite.complete && sprite.naturalWidth > 0) {
+    ctx.save()
+    const bounce = Math.abs(Math.sin(animFrame * 0.08)) * 4
+    const size = Math.min(w, h) - 20
+    const padX = (w - size) / 2
+    const padY = (h - size) / 2 - 10
+    ctx.drawImage(sprite, x + padX, y + padY + bounce, size, size)
+
+    if (phase >= 2) {
+      ctx.globalAlpha = 0.3 + Math.sin(animFrame * 0.1) * 0.2
+      ctx.fillStyle = bossName.includes('熔岩') || bossName.includes('魔王') ? '#ff4400'
+        : bossName.includes('暗影') || bossName.includes('狼王') ? '#6600cc'
+        : bossName.includes('霜') || bossName.includes('冰') || bossName.includes('凛') ? '#66ccff'
+        : bossName.includes('深渊') || bossName.includes('灭世') ? '#ff4080'
+        : '#44cc44'
+      ctx.fillRect(x - 5, y - 5, w + 10, h + 10)
+      ctx.globalAlpha = 1
+    }
+    ctx.restore()
+    drawBossAura(ctx, x, y, w, h, phase, animFrame, attacking)
+    return
+  }
+
+  // 程序化绘制回退
+  if (bossName.includes('草原') || bossName.includes('龙人')) drawDragonKnight(ctx, x, y, w, h, phase, animFrame, attacking)
+  else if (bossName.includes('暗影') || bossName.includes('狼王')) drawShadowLord(ctx, x, y, w, h, phase, animFrame, attacking)
+  else if (bossName.includes('魔王') || bossName.includes('熔岩')) drawDemonKing(ctx, x, y, w, h, phase, animFrame, attacking)
+  else if (bossName.includes('霜') || bossName.includes('冰') || bossName.includes('凛')) drawFrostGiant(ctx, x, y, w, h, phase, animFrame, attacking)
+  else if (bossName.includes('深渊') || bossName.includes('灭世')) drawAbyssLord(ctx, x, y, w, h, phase, animFrame, attacking)
+  else drawDragonKnight(ctx, x, y, w, h, phase, animFrame, attacking)
+  drawBossAura(ctx, x, y, w, h, phase, animFrame, attacking)
+}
+
+/**
+ * Boss 阶段动画特效（在精灵图/单图/程序化绘制之上叠加）：
+ * - 出招时前方亮起凝聚光效（配合精灵表攻击帧）
+ * - 阶段 2+ 脚下能量光带
+ * - 阶段 3 狂暴微闪
+ * 仅使用 fillRect/save/restore，兼容测试 mock context。
+ */
+function drawBossAura(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number,
+  phase: number, animFrame: number, attacking: boolean
+) {
+  // 攻击凝聚光效：出招瞬间身体前方亮起
+  if (attacking) {
+    const pulse = 0.2 + Math.sin(animFrame * 0.4) * 0.12
+    ctx.save()
+    ctx.globalAlpha = Math.max(0.12, pulse)
+    ctx.fillStyle = '#ffd24d'
+    ctx.fillRect(x + w * 0.28, y + h * 0.34, w * 0.3, h * 0.3)
+    ctx.restore()
+  }
+  // 阶段 2+ 脚下能量光带
+  if (phase >= 2) {
+    const glow = 0.18 + Math.sin(animFrame * 0.12) * 0.1
+    ctx.save()
+    ctx.globalAlpha = Math.max(0.08, glow)
+    ctx.fillStyle = '#ff8800'
+    ctx.fillRect(x - 8, y + h - 3, w + 16, 6)
+    ctx.restore()
+  }
+  // 阶段 3 狂暴微闪
+  if (phase >= 3 && animFrame % 8 < 2) {
+    ctx.save()
+    ctx.globalAlpha = 0.12
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(x - 6, y - 6, w + 12, h + 12)
+    ctx.restore()
+  }
+}
+
+function drawDragonKnight(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, phase: number, frame: number, attacking: boolean) {
+  const cx = x + w / 2, cy = y + h / 2

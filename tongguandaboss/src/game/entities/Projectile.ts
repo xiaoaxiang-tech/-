@@ -1,0 +1,44 @@
+import type { Direction, Rect } from '../types'
+import { drawProjectile } from '../engine/AssetLoader'
+
+export interface ProjectileData {
+  x: number
+  y: number
+  vx: number
+  vy: number
+  type: string
+  damage: number
+  dir: Direction
+  life: number
+  maxLife: number
+  owner: 'player' | 'enemy' | 'boss'
+  size: number
+  /** 武器阶数（0-4）：影响弹体外观与辉光（仅玩家弹幕生效） */
+  tier: number
+}
+
+export function createProjectile(
+  x: number, y: number,
+  vx: number, vy: number,
+  type: string, damage: number,
+  dir: Direction, owner: 'player' | 'enemy' | 'boss',
+  life: number = 120,
+  tier: number = 0
+): ProjectileData {
+  return { x, y, vx, vy, type, damage, dir, life, maxLife: life, owner, size: 8, tier }
+}
+
+export function updateProjectile(p: ProjectileData): boolean {
+  p.x += p.vx
+  p.y += p.vy
+  p.life--
+  return p.life > 0 && p.x > -200 && p.x < 8500 && p.y > -200 && p.y < 800
+}
+
+export function drawProjectileData(ctx: CanvasRenderingContext2D, p: ProjectileData) {
+  drawProjectile(ctx, p.x, p.y, p.type, p.dir, p.tier)
+}
+
+export function projectileRect(p: ProjectileData): Rect {
+  return { x: p.x - 2, y: p.y - 2, width: p.size, height: p.size }
+}

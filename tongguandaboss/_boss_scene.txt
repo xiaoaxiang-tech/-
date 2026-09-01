@@ -1,0 +1,9 @@
+866: if (enemy.wantsToShoot) {
+874: // Boss攻击
+1092: if (boss.wantsToAttack() && PhysicsManager.rectCollide(boss.rect, { ...this.player.rect, x: this.player.rect.x - 20, width: this.player.rect.width + 40 })) {
+1097: if (boss.wantsToShoot()) {
+1104: if (boss.wantsToCharge()) {
+1108: if (boss.wantsAreaAttack()) {
+1116: if (boss.isSpinningNow() && PhysicsManager.rectCollide(boss.rect, { ...this.player.rect, x: this.player.rect.x - 10, width: this.player.rect.width + 20 })) {
+1121: if (boss.willSummon()) {
+1122: boss.consumeSummon()

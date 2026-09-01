@@ -1,0 +1,220 @@
+import type { KeyState, Direction, WeaponType, WeaponStats, Platform, Rect, PlayerStats, AttackBox } from '../types'
+import { getNextWeapon, getWeaponByIndex } from './Weapon'
+import { getWeaponStatsFor, getArmorSpec, type ArmorSpec } from './Equipment'
+import { drawPlayerSprite } from '../engine/AssetLoader'
+import type { Enemy } from './Enemy'
+import type { Boss } from './Boss'
+
+export class Player {
+  x: number
+  y: number
+  vx: number = 0
+  vy: number = 0
+  onGround: boolean = false
+  dir: Direction = 'right'
+
+  // 状态
+  hp: number = 100
+  maxHp: number = 100
+  mp: number = 100
+  maxMp: number = 100
+  level: number = 1
+  exp: number = 0
+  expToNext: number = 100
+  attack: number = 10
+  defense: number = 5
+  speed: number = 4
+  jumpForce: number = 14
+  coins: number = 0
+
+  // 武器
+  currentWeapon: WeaponType = 'sword'
+  currentWeaponStats: WeaponStats
+
+  // ==== 装备系统 ====
+  /** 各武器类型当前装备的武器（含阶数加成） */
+  equippedWeapons: Record<WeaponType, WeaponStats>
+  /** 各武器类型当前使用/装备的阶数 0-4 */
+  weaponTiers: Record<WeaponType, number>
+  /** 各武器类型已经获得过的阶数集合（用于装备栏显示） */
+  weaponInventory: Record<WeaponType, number[]>
+  /** 当前护甲（null=未获得） */
+  armorSlot: ArmorSpec | null
+  /** 已经获得过的护甲阶数集合 */
+  armorInventory: number[]
+
+  // 攻击
+  attacking: boolean = false
+  attackTimer: number = 0
+  attackCooldown: number = 0
+
+  // 技能冷却
+  skill1Cooldown: number = 0
+  skill2Cooldown: number = 0
+  ultimateCooldown: number = 0
+  skill1MaxCD: number = 90
+  skill2MaxCD: number = 180
+  ultimateMaxCD: number = 300
+
+  // 攻击动画
+  attackMaxTimer: number = 0
+  attackProgress: number = 0
+  // 本轮攻击已经命中过的目标（避免同一挥砍多次伤害）
+  private hitTargets: Set<Enemy | Boss> = new Set()
+
+  // 按键追踪（用于边缘检测）
+  private lastInput: KeyState | null = null
+
+  // 动画
+  animFrame: number = 0
+  animTimer: number = 0
+  invincible: boolean = false
+  private invincibleTimer: number = 0
+  private canDoubleJump: boolean = false
+  private hasDoubleJumped: boolean = false
+  private jumpHeld: boolean = false
+  width: number = 32
+  height: number = 56
+  // 坠落判定阈值：超出此 y 坐标视为掉出地图（画布高 640 + 缓冲 80）
+  private fallLimit: number = 720
+  private switchCooldown: number = 0
+  private hitFlash: number = 0
+
+  constructor(x: number, y: number) {
+    this.x = x
+    this.y = y
+    this.equippedWeapons = {
+      sword: getWeaponStatsFor('sword', 0),
+      spear: getWeaponStatsFor('spear', 0),
+      bow: getWeaponStatsFor('bow', 0),
+      gun: getWeaponStatsFor('gun', 0)
+    }
+    this.weaponTiers = { sword: 0, spear: 0, bow: 0, gun: 0 }
+    this.weaponInventory = { sword: [0], spear: [0], bow: [0], gun: [0] }
+    this.armorSlot = null
+    this.armorInventory = []
+    this.currentWeaponStats = this.equippedWeapons['sword']
+  }
+
+  /** 护甲提供的额外防御 */
+  get armorDefense(): number {
+    return this.armorSlot?.defense ?? 0
+  }
+
+  /** 护甲提供的额外攻击 */
+  get armorAttackBonus(): number {
+    return this.armorSlot?.attackBonus ?? 0
+  }
+
+  /** 拾取武器：收录进收藏；若比当前装备更高阶则自动装备 */
+  learnWeapon(type: WeaponType, tier: number): { equipped: boolean; tier: number } {
+    if (tier > this.weaponTiers[type]) {
+      this.equipWeapon(type, tier)
+      return { equipped: true, tier }
+    }
+    if (!this.weaponInventory[type].includes(tier)) this.weaponInventory[type].push(tier)
+    return { equipped: false, tier: this.weaponTiers[type] }
+  }
+
+  /** 装备指定阶数的武器（替换同类旧武器） */
+  equipWeapon(type: WeaponType, tier: number) {
+    const stats = getWeaponStatsFor(type, tier)
+    this.equippedWeapons[type] = stats
+    this.weaponTiers[type] = tier
+    if (!this.weaponInventory[type].includes(tier)) this.weaponInventory[type].push(tier)
+    if (this.currentWeapon === type) this.currentWeaponStats = stats
+  }
+
+  /** 拾取护甲：收录进收藏；若比当前护甲更高阶则自动装备 */
+  learnArmor(tier: number): { equipped: boolean; tier: number } {
+    const cur = this.armorSlot?.tier ?? -1
+    if (tier > cur) {
+      this.equipArmor(tier)
+      return { equipped: true, tier }
+    }
+    if (!this.armorInventory.includes(tier)) this.armorInventory.push(tier)
+    return { equipped: false, tier: cur }
+  }
+
+  /** 装备指定阶数的护甲（替换旧护甲，生命加成随之变化） */
+  equipArmor(tier: number) {
+    const spec = getArmorSpec(tier)
+    if (!spec) return
+    if (this.armorSlot) this.maxHp -= this.armorSlot.hpBonus
+    this.armorSlot = { ...spec }
+    this.maxHp += spec.hpBonus
+    this.hp = Math.min(this.maxHp, this.hp + spec.hpBonus)
+    if (!this.armorInventory.includes(tier)) this.armorInventory.push(tier)
+  }
+
+  /** 卸下护甲（仅在极端情况下使用，保留收藏） */
+  unequipArmor() {
+    if (this.armorSlot) this.maxHp -= this.armorSlot.hpBonus
+    this.armorSlot = null
+    this.hp = Math.min(this.hp, this.maxHp)
+  }
+
+  get rect(): Rect {
+    return { x: this.x + 4, y: this.y + 4, width: this.width - 8, height: this.height - 4 }
+  }
+
+  get attackBox(): AttackBox {
+    const ws = this.currentWeaponStats
+    return {
+      x: this.dir === 'right' ? this.x + this.width / 2 : this.x - ws.range,
+      y: this.y - 5,
+      width: ws.range,
+      height: this.height + 10
+    }
+  }
+
+  getStats(): PlayerStats {
+    return {
+      x: this.x, y: this.y,
+      vx: this.vx, vy: this.vy,
+      onGround: this.onGround,
+      dir: this.dir,
+      hp: this.hp, maxHp: this.maxHp,
+      mp: this.mp, maxMp: this.maxMp,
+      level: this.level, exp: this.exp, expToNext: this.expToNext,
+      attack: this.attack, defense: this.defense,
+      speed: this.speed, jumpForce: this.jumpForce,
+      skillCooldowns: {
+        skill1: { current: this.skill1Cooldown, max: this.skill1MaxCD },
+        skill2: { current: this.skill2Cooldown, max: this.skill2MaxCD },
+        ultimate: { current: this.ultimateCooldown, max: this.ultimateMaxCD }
+      },
+      currentWeapon: this.currentWeapon,
+      weaponName: this.currentWeaponStats.name,
+      weaponTier: this.currentWeaponStats.tier ?? 0,
+      weaponTiers: { ...this.weaponTiers },
+      armorTier: this.armorSlot?.tier ?? -1,
+      armorName: this.armorSlot?.name ?? '',
+      coins: this.coins,
+      attacking: this.attacking,
+      attackTimer: this.attackTimer,
+      width: this.width, height: this.height,
+      invincible: this.invincible,
+      animFrame: this.animFrame,
+      animTimer: this.animTimer
+    }
+  }
+
+  update(input: KeyState, platforms: Platform[], dt: number = 1) {
+    this.animTimer++
+
+    // 按键边缘检测（防漏键）
+    const justPressed = this.lastInput ? {
+      attack: input.attack && !this.lastInput.attack,
+      skill1: input.skill1 && !this.lastInput.skill1,
+      skill2: input.skill2 && !this.lastInput.skill2,
+      ultimate: input.ultimate && !this.lastInput.ultimate,
+      switchWeapon: input.switchWeapon && !this.lastInput.switchWeapon,
+    } : input  // 第一帧全部当作按下
+    this.lastInput = { ...input }
+
+    // 计时器
+    if (this.attackTimer > 0) {
+      this.attackTimer--
+      if (this.attackTimer <= 0) {
+        this.attacking = false

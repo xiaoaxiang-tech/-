@@ -1,0 +1,3 @@
+2: import { drawEnemySprite } from '../engine/AssetLoader'
+631: drawEnemySprite(
+635: this.attackTimer > 35

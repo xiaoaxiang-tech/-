@@ -1,0 +1,463 @@
+const BOSS_DRAGON: BossConfig = {
+  name: '草原守护者·凯尔',
+  maxHp: 320,
+  width: 80,
+  height: 90,
+  phases: [
+    { pattern: 'melee', patterns: ['melee', 'charge'], speed: 4.5, attackDamage: 20, attackInterval: 45, hpThreshold: 1.0 },
+    { pattern: 'charge', patterns: ['charge', 'melee', 'aoe'], speed: 8, attackDamage: 25, attackInterval: 32, hpThreshold: 0.6 },
+    { pattern: 'aoe', patterns: ['aoe', 'charge', 'spin'], speed: 9.5, attackDamage: 30, attackInterval: 26, hpThreshold: 0.3 },
+  ],
+  dropExp: 200
+}
+
+const BOSS_SHADOW: BossConfig = {
+  name: '暗影狼王·诺克',
+  maxHp: 420,
+  width: 72,
+  height: 84,
+  phases: [
+    { pattern: 'projectile', patterns: ['projectile', 'spin'], speed: 3.5, attackDamage: 22, attackInterval: 40, hpThreshold: 1.0 },
+    { pattern: 'summon', patterns: ['summon', 'projectile', 'spin'], speed: 4.5, attackDamage: 25, attackInterval: 30, hpThreshold: 0.55 },
+    { pattern: 'spin', patterns: ['spin', 'aoe', 'summon'], speed: 8, attackDamage: 35, attackInterval: 22, hpThreshold: 0.3 },
+  ],
+  dropExp: 300
+}
+
+const BOSS_DEMON: BossConfig = {
+  name: '熔岩魔王·终焉',
+  maxHp: 520,
+  width: 90,
+  height: 100,
+  phases: [
+    { pattern: 'melee', patterns: ['melee', 'charge', 'projectile'], speed: 5.5, attackDamage: 28, attackInterval: 36, hpThreshold: 1.0 },
+    { pattern: 'projectile', patterns: ['projectile', 'charge', 'aoe'], speed: 6, attackDamage: 30, attackInterval: 26, hpThreshold: 0.6 },
+    { pattern: 'charge', patterns: ['charge', 'aoe', 'spin', 'summon'], speed: 11, attackDamage: 40, attackInterval: 20, hpThreshold: 0.35 },
+  ],
+  dropExp: 500
+}
+
+// ==================== 第4关 Boss：冰霜巨人 ====================
+const BOSS_FROST: BossConfig = {
+  name: '冰霜巨人·凛风',
+  maxHp: 680,
+  width: 100,
+  height: 110,
+  phases: [
+    { pattern: 'charge', patterns: ['charge', 'melee', 'projectile'], speed: 5, attackDamage: 30, attackInterval: 34, hpThreshold: 1.0 },
+    { pattern: 'melee', patterns: ['melee', 'charge', 'aoe'], speed: 8, attackDamage: 34, attackInterval: 26, hpThreshold: 0.6 },
+    { pattern: 'aoe', patterns: ['aoe', 'charge', 'projectile', 'spin'], speed: 10, attackDamage: 44, attackInterval: 18, hpThreshold: 0.3 },
+  ],
+  dropExp: 800
+}
+
+// ==================== 第5关 Boss：深渊主宰（最终 BOSS）====================
+const BOSS_ABYSS: BossConfig = {
+  name: '深渊主宰·灭世',
+  maxHp: 950,
+  width: 115,
+  height: 130,
+  phases: [
+    { pattern: 'projectile', patterns: ['projectile', 'charge', 'summon', 'spin'], speed: 6, attackDamage: 36, attackInterval: 30, hpThreshold: 1.0 },
+    { pattern: 'aoe', patterns: ['aoe', 'projectile', 'charge', 'summon'], speed: 8, attackDamage: 42, attackInterval: 22, hpThreshold: 0.65 },
+    { pattern: 'spin', patterns: ['spin', 'aoe', 'charge', 'projectile', 'summon'], speed: 13, attackDamage: 55, attackInterval: 15, hpThreshold: 0.3 },
+  ],
+  dropExp: 1500
+}
+
+// ==================== 关卡配置 ====================
+export const LEVEL_CONFIGS: LevelConfig[] = [
+  // ---------- 关卡 1: 翠绿草原 ----------
+  {
+    id: 0,
+    name: '翠绿草原',
+    bossName: '草原守护者·凯尔',
+    groundY: GROUND_Y,
+    levelLength: 6000,
+    platforms: [
+      ...makeGround(6000, GROUND_Y),
+      { x: 300, y: 480, width: 120, height: 16, type: 'platform' },
+      { x: 600, y: 420, width: 100, height: 16, type: 'platform' },
+      { x: 900, y: 460, width: 140, height: 16, type: 'platform' },
+    ],
+    waves: [
+      { enemies: [
+        { type: 'slime', x: 350, y: GROUND_Y - 24, count: 3, delay: 60 },
+        { type: 'slime', x: 500, y: GROUND_Y - 24, count: 2, delay: 100 },
+      ]},
+    ],
+    scenes: [
+      makeScene(0, '草原初道', 2000, [
+        ...makeGround(2000, GROUND_Y),
+        { x: 300, y: 480, width: 120, height: 16, type: 'platform' },
+        { x: 600, y: 420, width: 100, height: 16, type: 'platform' },
+        { x: 900, y: 460, width: 140, height: 16, type: 'platform' },
+      ], [
+        { enemies: [
+          { type: 'slime', x: 350, y: GROUND_Y - 24, count: 3, delay: 60 },
+          { type: 'slime', x: 500, y: GROUND_Y - 24, count: 2, delay: 100 },
+        ]},
+        { enemies: [
+          { type: 'bee_warrior', x: 700, y: 420, count: 3, delay: 80 },
+          { type: 'slime', x: 800, y: GROUND_Y - 24, count: 2, delay: 120 },
+        ]},
+        { enemies: [
+          { type: 'goblin', x: 950, y: GROUND_Y - 36, count: 3, delay: 80 },
+          { type: 'bee_warrior', x: 1100, y: 460, count: 2, delay: 130 },
+        ]},
+        { enemies: [
+          { type: 'slime', x: 1250, y: GROUND_Y - 24, count: 2, delay: 60, elite: true },
+          { type: 'goblin', x: 1350, y: GROUND_Y - 36, count: 2, delay: 90 },
+        ]},
+      ], 0, {
+        chests: [
+          { x: 360, type: 'common' },
+          { x: 620, type: 'gold' },
+        ],
+        secretArea: {
+          entranceX: 1100,
+          length: 420,
+          platforms: [
+            { x: 1110, y: 400, width: 130, height: 16, type: 'platform' },
+            { x: 1290, y: 320, width: 140, height: 16, type: 'platform' },
+          ],
+          chests: [{ x: 1340, type: 'special' }],
+          eliteGuards: [{ type: 'slime', count: 1 }],
+          hint: '发现隐藏石阶！跳上去看看…',
+        },
+      }),
+      makeScene(1, '沼泽突袭', 2000, [
+        ...makeGround(2000, GROUND_Y),
+        { x: 220, y: 380, width: 100, height: 16, type: 'platform' },
+        { x: 560, y: 330, width: 120, height: 16, type: 'platform' },
+        { x: 900, y: 380, width: 130, height: 16, type: 'platform' },
+      ], [
+        { enemies: [
+          { type: 'bee_warrior', x: 400, y: 380, count: 3, delay: 70 },
+          { type: 'goblin', x: 650, y: GROUND_Y - 36, count: 2, delay: 100 },
+        ]},
+        { enemies: [
+          { type: 'goblin', x: 900, y: GROUND_Y - 36, count: 3, delay: 80 },
+          { type: 'bee_warrior', x: 1100, y: 330, count: 2, delay: 120 },
+        ]},
+        { enemies: [
+          { type: 'slime', x: 300, y: GROUND_Y - 24, count: 3, delay: 60 },
+          { type: 'goblin', x: 700, y: GROUND_Y - 36, count: 3, delay: 90 },
+          { type: 'bee_warrior', x: 1000, y: 380, count: 2, delay: 140 },
+        ]},
+        { enemies: [
+          { type: 'goblin', x: 1200, y: GROUND_Y - 36, count: 2, delay: 70, elite: true },
+          { type: 'slime', x: 1300, y: GROUND_Y - 24, count: 2, delay: 100 },
+        ]},
+      ], 1, {
+        chests: [
+          { x: 260, type: 'common' },
+          { x: 580, type: 'gold' },
+        ],
+        secretArea: {
+          entranceX: 1150,
+          length: 400,
+          platforms: [
+            { x: 1160, y: 350, width: 130, height: 16, type: 'platform' },
+            { x: 1330, y: 270, width: 140, height: 16, type: 'platform' },
+          ],
+          chests: [{ x: 1380, type: 'special' }],
+          eliteGuards: [{ type: 'bee_warrior', count: 2 }],
+          hint: '沼泽深处似乎有暗门…',
+        },
+      }),
+      makeScene(2, '巨树之巅', 2000, [
+        ...makeGround(2000, GROUND_Y),
+        { x: 250, y: 320, width: 140, height: 16, type: 'platform' },
+        { x: 620, y: 270, width: 120, height: 16, type: 'platform' },
+        { x: 980, y: 320, width: 160, height: 16, type: 'platform' },
+      ], [
+        { enemies: [
+          { type: 'goblin', x: 300, y: GROUND_Y - 36, count: 3, delay: 70 },
+          { type: 'bee_warrior', x: 500, y: 270, count: 3, delay: 130 },
+        ]},
+        { enemies: [
+          { type: 'goblin', x: 850, y: GROUND_Y - 36, count: 3, delay: 60 },
+          { type: 'bee_warrior', x: 1100, y: 320, count: 3, delay: 140 },
+        ]},
+        { enemies: [
+          { type: 'slime', x: 300, y: GROUND_Y - 24, count: 3, delay: 100 },
+          { type: 'goblin', x: 650, y: GROUND_Y - 36, count: 4, delay: 80 },
+          { type: 'bee_warrior', x: 950, y: 320, count: 3, delay: 130 },
+        ]},
+        { enemies: [
+          { type: 'goblin', x: 1200, y: GROUND_Y - 36, count: 2, delay: 80, elite: true },
+          { type: 'bee_warrior', x: 1320, y: 320, count: 2, delay: 110, elite: true },
+        ]},
+      ], 2, {
+        chests: [
+          { x: 270, type: 'gold' },
+          { x: 700, type: 'common' },
+        ],
+        secretArea: {
+          entranceX: 1100,
+          length: 420,
+          platforms: [
+            { x: 1150, y: 340, width: 130, height: 16, type: 'platform' },
+            { x: 1330, y: 260, width: 140, height: 16, type: 'platform' },
+          ],
+          chests: [{ x: 1380, type: 'special' }],
+          eliteGuards: [{ type: 'bee_warrior', count: 2 }],
+          hint: '树冠深处有微光闪烁…',
+        },
+      }),
+    ],
+    boss: BOSS_DRAGON,
+    background: { skyColor: '#87CEEB', groundColor: '#5a8a3a', accentColor: '#3a6a1a' },
+    // === 故事 ===
+    storyTitle: '第一章 · 启程之光',
+    storyIntro: '黎恩的故乡被黑暗吞噬的第七天，他握紧父亲临终前留下的长剑，踏出废墟。东方的翠绿草原是第一片尚未完全沦陷的土地，但他知道，那里已不再宁静……',
+    storyOutro: '凯尔倒下，眼神中的红光褪去，恢复清明。他握住黎恩的手：「我曾被黑暗操控……请用这把剑，也救救其他被侵蚀的灵魂。」一团绿色光华从凯尔身上飘出，化作一只小史莱姆，跳到黎恩肩头。',
+    bossDialog: [
+      { speaker: '凯尔', text: '站住！凡踏入此地者，皆需……咳，皆需受死！' },
+      { speaker: '黎恩', text: '你的眼神……是被侵蚀了？请容我帮你一把！' },
+      { speaker: '凯尔', text: '愚不可及！龙人之怒，让你粉身碎骨！' },
+    ],
+    victoryDialog: [
+      { speaker: '凯尔', text: '我……竟然被打败了。束缚我灵魂的黑暗，散去了……' },
+      { speaker: '黎恩', text: '请借我力量。前方还有被侵蚀的灵魂等待拯救。' },
+      { speaker: '凯尔', text: '愿我的化身「啵啵」伴你同行。去吧，少年。' },
+    ],
+    mapNode: { x: 20, y: 65, icon: '🌿' },
+    petReward: PET_SLIME,
+  },
+
+  // ---------- 关卡 2: 暗夜森林 ----------
+  {
+    id: 1,
+    name: '暗夜森林',
+    bossName: '暗影狼王·诺克',
+    groundY: GROUND_Y,
+    levelLength: 6200,
+    platforms: [
+      ...makeGround(6200, GROUND_Y),
+      { x: 250, y: 500, width: 100, height: 14, type: 'platform' },
+      { x: 500, y: 430, width: 120, height: 14, type: 'platform' },
+    ],
+    waves: [
+      { enemies: [
+        { type: 'shadow_ghost', x: 400, y: 470, count: 3, delay: 80 },
+        { type: 'skeleton', x: 550, y: GROUND_Y - 40, count: 2, delay: 90 },
+      ]},
+    ],
+    scenes: [
+      makeScene(0, '月影林道', 2000, [
+        ...makeGround(2000, GROUND_Y),
+        { x: 250, y: 500, width: 100, height: 14, type: 'platform' },
+        { x: 500, y: 430, width: 120, height: 14, type: 'platform' },
+      ], [
+        { enemies: [
+          { type: 'shadow_ghost', x: 400, y: 470, count: 3, delay: 80 },
+          { type: 'skeleton', x: 550, y: GROUND_Y - 40, count: 2, delay: 90 },
+        ]},
+        { enemies: [
+          { type: 'spider_witch', x: 900, y: 470, count: 2, delay: 120 },
+          { type: 'shadow_ghost', x: 1050, y: 380, count: 2, delay: 100 },
+        ]},
+        { enemies: [
+          { type: 'skeleton', x: 350, y: GROUND_Y - 40, count: 3, delay: 70 },
+          { type: 'spider_witch', x: 700, y: 430, count: 2, delay: 130 },
+          { type: 'shadow_ghost', x: 950, y: 380, count: 3, delay: 110 },
+        ]},
+        { enemies: [
+          { type: 'skeleton', x: 1200, y: GROUND_Y - 40, count: 2, delay: 80, elite: true },
+          { type: 'shadow_ghost', x: 1320, y: 380, count: 2, delay: 110 },
+        ]},
+      ], 3, {
+        chests: [
+          { x: 270, type: 'common' },
+          { x: 520, type: 'gold' },
+        ],
+        secretArea: {
+          entranceX: 1080,
+          length: 420,
+          platforms: [
+            { x: 1090, y: 400, width: 120, height: 14, type: 'platform' },
+            { x: 1260, y: 320, width: 140, height: 14, type: 'platform' },
+          ],
+          chests: [{ x: 1310, type: 'special' }],
+          eliteGuards: [{ type: 'shadow_ghost', count: 2 }],
+          hint: '月光下有虚影指引…',
+        },
+      }),
+      makeScene(1, '枯木峡谷', 2100, [
+        ...makeGround(2100, GROUND_Y),
+        { x: 220, y: 420, width: 110, height: 14, type: 'platform' },
+        { x: 650, y: 360, width: 120, height: 14, type: 'platform' },
+        { x: 1050, y: 410, width: 130, height: 14, type: 'platform' },
+      ], [
+        { enemies: [
+          { type: 'shadow_ghost', x: 300, y: 390, count: 3, delay: 70 },
+          { type: 'spider_witch', x: 700, y: 420, count: 2, delay: 130 },
+        ]},
+        { enemies: [
+          { type: 'dark_mage', x: 900, y: 360, count: 2, delay: 150 },
+          { type: 'shadow_ghost', x: 1200, y: 290, count: 3, delay: 100 },
+        ]},
+        { enemies: [
+          { type: 'spider_witch', x: 450, y: 420, count: 3, delay: 100 },
+          { type: 'skeleton', x: 850, y: GROUND_Y - 40, count: 3, delay: 80 },
+          { type: 'dark_mage', x: 1150, y: 410, count: 1, delay: 160 },
+        ]},
+        { enemies: [
+          { type: 'dark_mage', x: 1300, y: 360, count: 1, delay: 100, elite: true },
+          { type: 'skeleton', x: 1400, y: GROUND_Y - 40, count: 2, delay: 120, elite: true },
+        ]},
+      ], 4, {
+        chests: [
+          { x: 250, type: 'common' },
+          { x: 680, type: 'gold' },
+        ],
+        secretArea: {
+          entranceX: 1200,
+          length: 400,
+          platforms: [
+            { x: 1210, y: 380, width: 130, height: 14, type: 'platform' },
+            { x: 1390, y: 300, width: 140, height: 14, type: 'platform' },
+          ],
+          chests: [{ x: 1440, type: 'special' }],
+          eliteGuards: [{ type: 'spider_witch', count: 1 }],
+          hint: '枯木后传来低语…',
+        },
+      }),
+      makeScene(2, '银月祭坛', 2100, [
+        ...makeGround(2100, GROUND_Y),
+        { x: 300, y: 340, width: 120, height: 14, type: 'platform' },
+        { x: 700, y: 280, width: 140, height: 14, type: 'platform' },
+        { x: 1100, y: 320, width: 110, height: 14, type: 'platform' },
+      ], [
+        { enemies: [
+          { type: 'spider_witch', x: 400, y: 340, count: 3, delay: 100 },
+          { type: 'dark_mage', x: 700, y: 280, count: 2, delay: 120 },
+        ]},
+        { enemies: [
+          { type: 'shadow_ghost', x: 1000, y: 320, count: 3, delay: 90 },
+          { type: 'dark_mage', x: 1200, y: 280, count: 2, delay: 140 },
+        ]},
+        { enemies: [
+          { type: 'dark_mage', x: 350, y: 340, count: 2, delay: 140 },
+          { type: 'spider_witch', x: 800, y: 280, count: 3, delay: 100 },
+          { type: 'shadow_ghost', x: 1200, y: 320, count: 4, delay: 110 },
+        ]},
+        { enemies: [
+          { type: 'dark_mage', x: 1350, y: 280, count: 2, delay: 100, elite: true },
+          { type: 'shadow_ghost', x: 1450, y: 320, count: 2, delay: 120, elite: true },
+        ]},
+      ], 5, {
+        chests: [
+          { x: 320, type: 'gold' },
+          { x: 800, type: 'common' },
+        ],
+        secretArea: {
+          entranceX: 1250,
+          length: 400,
+          platforms: [
+            { x: 1260, y: 300, width: 120, height: 14, type: 'platform' },
+            { x: 1420, y: 230, width: 140, height: 14, type: 'platform' },
+          ],
+          chests: [{ x: 1460, type: 'special' }],
+          eliteGuards: [{ type: 'dark_mage', count: 1 }],
+          hint: '祭坛之下藏着密室…',
+        },
+      }),
+    ],
+    boss: BOSS_SHADOW,
+    background: { skyColor: '#1a1a3a', groundColor: '#2a1a0a', accentColor: '#1a0a00' },
+    storyTitle: '第二章 · 暗影迷踪',
+    storyIntro: '穿过草原，黎恩来到曾经繁华的银月林地。如今树木枯死，月光也被吞噬。啵啵在他肩头抖了抖——这里潜伏着比龙人更狡猾的敌人。',
+    storyOutro: '诺克身形消散，化作一缕紫雾盘旋。黎恩用剑尖挑起紫雾，将其收入水晶瓶。「你的本源尚未被污染，诺克。我会还你自由。」紫雾凝结成一只精灵，翅膀扇动如夜。',
+    bossDialog: [
+      { speaker: '诺克', text: '又是来送死的勇者？上一任的尸骨还在我脚下。' },
+      { speaker: '黎恩', text: '你的声音里没有恨意，只有……哀伤。' },
+      { speaker: '诺克', text: '……闭嘴。让我看看你的本事！' },
+    ],
+    victoryDialog: [
+      { speaker: '诺克', text: '我输了。终于……可以安息了吗？' },
+      { speaker: '黎恩', text: '不。请借我你的眼，看清楚世界的真相。' },
+      { speaker: '诺克', text: '少年……你比我想象的更深。请带上我的化身「夜」。' },
+    ],
+    mapNode: { x: 50, y: 45, icon: '🌙' },
+    petReward: PET_SHADOW,
+  },
+
+  // ---------- 关卡 3: 火焰地狱 ----------
+  {
+    id: 2,
+    name: '火焰地狱',
+    bossName: '熔岩魔王·终焉',
+    groundY: GROUND_Y,
+    levelLength: 6400,
+    platforms: [
+      ...makeGround(6400, GROUND_Y),
+      { x: 200, y: 480, width: 100, height: 12, type: 'platform' },
+      { x: 450, y: 400, width: 120, height: 12, type: 'platform' },
+    ],
+    waves: [
+      { enemies: [
+        { type: 'fire_imp', x: 350, y: GROUND_Y - 32, count: 3, delay: 140 },
+        { type: 'magma_golem', x: 500, y: GROUND_Y - 40, count: 1, delay: 80 },
+      ]},
+    ],
+    scenes: [
+      makeScene(0, '岩浆前哨', 2000, [
+        ...makeGround(2000, GROUND_Y),
+        { x: 200, y: 480, width: 100, height: 12, type: 'platform' },
+        { x: 450, y: 400, width: 120, height: 12, type: 'platform' },
+      ], [
+        { enemies: [
+          { type: 'fire_imp', x: 350, y: GROUND_Y - 32, count: 3, delay: 140 },
+          { type: 'magma_golem', x: 500, y: GROUND_Y - 40, count: 1, delay: 80 },
+        ]},
+        { enemies: [
+          { type: 'fire_imp', x: 800, y: 440, count: 3, delay: 120 },
+          { type: 'magma_golem', x: 950, y: GROUND_Y - 40, count: 1, delay: 100 },
+        ]},
+        { enemies: [
+          { type: 'fire_imp', x: 600, y: 400, count: 4, delay: 110 },
+          { type: 'magma_golem', x: 900, y: GROUND_Y - 40, count: 2, delay: 90 },
+        ]},
+        { enemies: [
+          { type: 'fire_imp', x: 1200, y: 400, count: 2, delay: 100, elite: true },
+          { type: 'magma_golem', x: 1300, y: GROUND_Y - 40, count: 1, delay: 140, elite: true },
+        ]},
+      ], 6, {
+        chests: [
+          { x: 250, type: 'common' },
+          { x: 470, type: 'gold' },
+        ],
+        secretArea: {
+          entranceX: 1050,
+          length: 400,
+          platforms: [
+            { x: 1060, y: 420, width: 120, height: 12, type: 'platform' },
+            { x: 1230, y: 340, width: 140, height: 12, type: 'platform' },
+          ],
+          chests: [{ x: 1280, type: 'special' }],
+          eliteGuards: [{ type: 'fire_imp', count: 2 }],
+          hint: '熔岩下有灼热的气息…',
+        },
+      }),
+      makeScene(1, '熔岩裂谷', 2200, [
+        ...makeGround(2200, GROUND_Y),
+        { x: 300, y: 350, width: 140, height: 12, type: 'platform' },
+        { x: 800, y: 300, width: 130, height: 12, type: 'platform' },
+        { x: 1200, y: 360, width: 120, height: 12, type: 'platform' },
+      ], [
+        { enemies: [
+          { type: 'magma_golem', x: 400, y: GROUND_Y - 40, count: 2, delay: 60 },
+          { type: 'fire_imp', x: 650, y: 350, count: 3, delay: 160 },
+        ]},
+        { enemies: [
+          { type: 'fire_imp', x: 1000, y: 360, count: 4, delay: 110 },
+          { type: 'magma_golem', x: 1300, y: GROUND_Y - 40, count: 2, delay: 70 },
+        ]},
+        { enemies: [
+          { type: 'fire_imp', x: 500, y: 350, count: 5, delay: 100 },
+          { type: 'magma_golem', x: 1000, y: GROUND_Y - 40, count: 3, delay: 80 },
+        ]},
+        { enemies: [

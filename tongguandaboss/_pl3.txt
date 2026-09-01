@@ -1,0 +1,40 @@
+  }
+
+  update(input: KeyState, platforms: Platform[], dt: number = 1) {
+    this.animTimer++
+
+    // 按键边缘检测（防漏键）
+    const justPressed = this.lastInput ? {
+      attack: input.attack && !this.lastInput.attack,
+      skill1: input.skill1 && !this.lastInput.skill1,
+      skill2: input.skill2 && !this.lastInput.skill2,
+      ultimate: input.ultimate && !this.lastInput.ultimate,
+      switchWeapon: input.switchWeapon && !this.lastInput.switchWeapon,
+    } : input  // 第一帧全部当作按下
+    this.lastInput = { ...input }
+
+    // 计时器
+    if (this.attackTimer > 0) {
+      this.attackTimer--
+      if (this.attackTimer <= 0) {
+        this.attacking = false
+        this.attackProgress = 0
+        this.attackMaxTimer = 0
+      } else {
+        this.attackProgress = 1 - this.attackTimer / this.attackMaxTimer
+      }
+    }
+    if (this.attackCooldown > 0) this.attackCooldown--
+    if (this.skill1Cooldown > 0) this.skill1Cooldown--
+    if (this.skill2Cooldown > 0) this.skill2Cooldown--
+    if (this.ultimateCooldown > 0) this.ultimateCooldown--
+    if (this.invincibleTimer > 0) {
+      this.invincibleTimer--
+      if (this.invincibleTimer <= 0) this.invincible = false
+    }
+    if (this.switchCooldown > 0) this.switchCooldown--
+    if (this.hitFlash > 0) this.hitFlash--
+
+    // 移动
+    this.vx = 0
+    if (input.left) {

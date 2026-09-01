@@ -1,0 +1,330 @@
+          { type: 'magma_golem', x: 1400, y: GROUND_Y - 40, count: 2, delay: 90, elite: true },
+          { type: 'fire_imp', x: 1520, y: 360, count: 2, delay: 130, elite: true },
+        ]},
+      ], 7, {
+        chests: [
+          { x: 320, type: 'gold' },
+          { x: 850, type: 'common' },
+        ],
+        secretArea: {
+          entranceX: 1350,
+          length: 400,
+          platforms: [
+            { x: 1360, y: 380, width: 120, height: 12, type: 'platform' },
+            { x: 1500, y: 300, width: 130, height: 12, type: 'platform' },
+          ],
+          chests: [{ x: 1540, type: 'special' }],
+          eliteGuards: [{ type: 'magma_golem', count: 1 }],
+          hint: '裂谷深处有发光之物…',
+        },
+      }),
+      makeScene(2, '火山核心', 2200, [
+        ...makeGround(2200, GROUND_Y),
+        { x: 250, y: 260, width: 130, height: 12, type: 'platform' },
+        { x: 650, y: 320, width: 120, height: 12, type: 'platform' },
+        { x: 1100, y: 280, width: 140, height: 12, type: 'platform' },
+      ], [
+        { enemies: [
+          { type: 'magma_golem', x: 350, y: GROUND_Y - 40, count: 2, delay: 180 },
+          { type: 'fire_imp', x: 700, y: 260, count: 4, delay: 130 },
+        ]},
+        { enemies: [
+          { type: 'magma_golem', x: 900, y: GROUND_Y - 40, count: 2, delay: 150 },
+          { type: 'fire_imp', x: 1200, y: 280, count: 4, delay: 140 },
+        ]},
+        { enemies: [
+          { type: 'fire_imp', x: 500, y: 320, count: 5, delay: 100 },
+          { type: 'magma_golem', x: 1000, y: GROUND_Y - 40, count: 3, delay: 120 },
+        ]},
+        { enemies: [
+          { type: 'magma_golem', x: 1350, y: GROUND_Y - 40, count: 2, delay: 100, elite: true },
+          { type: 'fire_imp', x: 1480, y: 280, count: 3, delay: 120, elite: true },
+        ]},
+      ], 8, {
+        chests: [
+          { x: 270, type: 'gold' },
+          { x: 700, type: 'common' },
+        ],
+        secretArea: {
+          entranceX: 1250,
+          length: 420,
+          platforms: [
+            { x: 1260, y: 280, width: 120, height: 12, type: 'platform' },
+            { x: 1430, y: 200, width: 140, height: 12, type: 'platform' },
+          ],
+          chests: [{ x: 1480, type: 'special' }],
+          eliteGuards: [{ type: 'magma_golem', count: 1 }, { type: 'fire_imp', count: 1 }],
+          hint: '核心深处藏着禁忌之力…',
+        },
+      }),
+    ],
+    boss: BOSS_DEMON,
+    background: { skyColor: '#331111', groundColor: '#441111', accentColor: '#221100' },
+    storyTitle: '第三章 · 熔岩之心',
+    storyIntro: '火焰从地心涌出，黎恩追随着第三枚碎片的回响，踏入魔王沉睡的火山。啵啵与夜在他身后紧绷——他们知道，前方守护碎片的，是被黑暗侵蚀千年的古代炎之王者。',
+    storyOutro: '炎之王者倒在岩浆之上，庞大的身躯化作点点火星。第三枚水晶碎片缓缓升起，落入黎恩手中。然而当他握紧碎片的瞬间，一股更深的寒意掠过心头——北境的方向，传来了另一道呼唤。',
+    bossDialog: [
+      { speaker: '炎之王者', text: '勇者啊……你终于来了。我等了你千年。' },
+      { speaker: '黎恩', text: '你……在等我？' },
+      { speaker: '炎之王者', text: '封印使我不得解脱。来吧，让我看见你的决心！' },
+    ],
+    victoryDialog: [
+      { speaker: '炎之王者', text: '终于……自由了。少年，谢谢你。' },
+      { speaker: '黎恩', text: '你也是被水晶囚禁的？这一切……到底为了什么？' },
+      { speaker: '炎之王者', text: '真相在北境。带着我的化身「赤」去吧，那是最后的线索。' },
+    ],
+    mapNode: { x: 80, y: 25, icon: '🔥' },
+    petReward: PET_DEMON,
+  },
+  // ---------- 关卡 4: 永冻冰原 ----------
+  {
+    id: 3,
+    name: '永冻冰原',
+    bossName: '冰霜巨人·凛风',
+    groundY: GROUND_Y,
+    levelLength: 7000,
+    platforms: [
+      ...makeGround(7000, GROUND_Y),
+    ],
+    waves: [
+      { enemies: [
+        { type: 'frost_wolf', x: 350, y: GROUND_Y - 28, count: 4, delay: 60 },
+        { type: 'ice_troll', x: 600, y: GROUND_Y - 44, count: 2, delay: 110 },
+      ]},
+    ],
+    scenes: [
+      makeScene(0, '冰封平原', 2200, [
+        ...makeGround(2200, GROUND_Y),
+        { x: 250, y: 440, width: 120, height: 16, type: 'platform' },
+        { x: 600, y: 380, width: 110, height: 16, type: 'platform' },
+        { x: 1000, y: 420, width: 130, height: 16, type: 'platform' },
+      ], [
+        { enemies: [
+          { type: 'frost_wolf', x: 350, y: GROUND_Y - 28, count: 4, delay: 60 },
+          { type: 'ice_troll', x: 600, y: GROUND_Y - 44, count: 2, delay: 110 },
+        ]},
+        { enemies: [
+          { type: 'ice_elemental', x: 800, y: 380, count: 3, delay: 90 },
+          { type: 'frost_wolf', x: 950, y: GROUND_Y - 28, count: 3, delay: 120 },
+        ]},
+        { enemies: [
+          { type: 'ice_troll', x: 1100, y: GROUND_Y - 44, count: 2, delay: 90 },
+          { type: 'ice_elemental', x: 1250, y: 420, count: 3, delay: 130 },
+          { type: 'frost_wolf', x: 1400, y: GROUND_Y - 28, count: 2, delay: 150 },
+        ]},
+        { enemies: [
+          { type: 'ice_troll', x: 1500, y: GROUND_Y - 44, count: 1, delay: 80, elite: true },
+          { type: 'frost_wolf', x: 1620, y: GROUND_Y - 28, count: 2, delay: 110, elite: true },
+        ]},
+      ], 9, {
+        chests: [
+          { x: 300, type: 'common' },
+          { x: 640, type: 'gold' },
+        ],
+        secretArea: {
+          entranceX: 1200,
+          length: 440,
+          platforms: [
+            { x: 1210, y: 340, width: 130, height: 16, type: 'platform' },
+            { x: 1400, y: 260, width: 140, height: 16, type: 'platform' },
+          ],
+          chests: [{ x: 1450, type: 'special' }],
+          eliteGuards: [{ type: 'ice_elemental', count: 2 }],
+          hint: '暴雪深处有微光闪烁…',
+        },
+      }),
+      makeScene(1, '霜冻洞窟', 2300, [
+        ...makeGround(2300, GROUND_Y),
+        { x: 300, y: 360, width: 120, height: 16, type: 'platform' },
+        { x: 700, y: 310, width: 130, height: 16, type: 'platform' },
+        { x: 1150, y: 380, width: 120, height: 16, type: 'platform' },
+      ], [
+        { enemies: [
+          { type: 'ice_elemental', x: 420, y: 360, count: 3, delay: 80 },
+          { type: 'ice_troll', x: 680, y: GROUND_Y - 44, count: 2, delay: 120 },
+        ]},
+        { enemies: [
+          { type: 'frost_wolf', x: 900, y: GROUND_Y - 28, count: 4, delay: 70 },
+          { type: 'ice_elemental', x: 1100, y: 310, count: 2, delay: 130 },
+        ]},
+        { enemies: [
+          { type: 'ice_troll', x: 300, y: GROUND_Y - 44, count: 2, delay: 90 },
+          { type: 'frost_wolf', x: 800, y: GROUND_Y - 28, count: 3, delay: 110 },
+          { type: 'ice_elemental', x: 1250, y: 380, count: 2, delay: 140 },
+        ]},
+        { enemies: [
+          { type: 'ice_troll', x: 1400, y: GROUND_Y - 44, count: 2, delay: 80, elite: true },
+          { type: 'ice_elemental', x: 1550, y: 380, count: 2, delay: 120, elite: true },
+        ]},
+      ], 10, {
+        chests: [
+          { x: 340, type: 'gold' },
+          { x: 760, type: 'common' },
+        ],
+        secretArea: {
+          entranceX: 1300,
+          length: 420,
+          platforms: [
+            { x: 1310, y: 300, width: 130, height: 16, type: 'platform' },
+            { x: 1500, y: 220, width: 140, height: 16, type: 'platform' },
+          ],
+          chests: [{ x: 1550, type: 'special' }],
+          eliteGuards: [{ type: 'ice_troll', count: 1 }],
+          hint: '洞壁上的冰层下有蹊跷…',
+        },
+      }),
+      makeScene(2, '冰晶王座', 2500, [
+        ...makeGround(2500, GROUND_Y),
+        { x: 220, y: 330, width: 120, height: 16, type: 'platform' },
+        { x: 650, y: 400, width: 130, height: 16, type: 'platform' },
+        { x: 1150, y: 320, width: 140, height: 16, type: 'platform' },
+        { x: 1550, y: 380, width: 120, height: 16, type: 'platform' },
+      ], [
+        { enemies: [
+          { type: 'ice_troll', x: 300, y: GROUND_Y - 44, count: 3, delay: 100 },
+          { type: 'frost_wolf', x: 700, y: GROUND_Y - 28, count: 3, delay: 130 },
+        ]},
+        { enemies: [
+          { type: 'ice_elemental', x: 800, y: 400, count: 3, delay: 80 },
+          { type: 'ice_troll', x: 1100, y: GROUND_Y - 44, count: 2, delay: 120 },
+          { type: 'frost_wolf', x: 1300, y: GROUND_Y - 28, count: 2, delay: 140 },
+        ]},
+        { enemies: [
+          { type: 'ice_elemental', x: 500, y: 330, count: 3, delay: 90 },
+          { type: 'ice_troll', x: 900, y: GROUND_Y - 44, count: 2, delay: 110 },
+          { type: 'frost_wolf', x: 1500, y: GROUND_Y - 28, count: 3, delay: 130 },
+        ]},
+        { enemies: [
+          { type: 'ice_troll', x: 1600, y: GROUND_Y - 44, count: 2, delay: 80, elite: true },
+          { type: 'ice_elemental', x: 1780, y: 320, count: 2, delay: 120, elite: true },
+        ]},
+      ], 11, {
+        chests: [
+          { x: 260, type: 'gold' },
+          { x: 680, type: 'common' },
+          { x: 1200, type: 'gold' },
+        ],
+        secretArea: {
+          entranceX: 1400,
+          length: 460,
+          platforms: [
+            { x: 1410, y: 260, width: 130, height: 16, type: 'platform' },
+            { x: 1620, y: 180, width: 150, height: 16, type: 'platform' },
+          ],
+          chests: [{ x: 1670, type: 'special' }],
+          eliteGuards: [{ type: 'ice_troll', count: 1 }, { type: 'frost_wolf', count: 1 }],
+          hint: '极光之下，冰晶王座的秘密…',
+        },
+      }),
+    ],
+    boss: BOSS_FROST,
+    background: { skyColor: '#1e3a4a', groundColor: '#2a4a5a', accentColor: '#12303a' },
+    storyTitle: '第四章 · 永冻之约',
+    storyIntro: '火山尽头没有终点——黎恩在熔岩灰烬中找到一封来自北境的残信：「第四枚碎片沉睡于永冻冰原，凛风守护它千年。」于是，他踏着暴雪北上，穿过冰封平原与霜冻洞窟。越往北，空气越冷，仿佛连时间都被冻结。',
+    storyOutro: '冰霜巨人单膝跪地，庞大的身躯碎裂成漫天冰晶。一枚被冻结千年的水晶碎片缓缓浮现，与黎恩手中的碎片共鸣。巨人化作冰晶幼狼「雪」，安静地跟在他的身后。北境的暴雪，第一次有了温度。',
+    bossDialog: [
+      { speaker: '凛风', text: '凡人……竟敢踏入我的永冻领域。' },
+      { speaker: '黎恩', text: '你守护的碎片，属于这个世界的光明。请让开。' },
+      { speaker: '凛风', text: '光明？我只记得黑暗里的永恒。让我看看你的热量！' },
+    ],
+    victoryDialog: [
+      { speaker: '凛风', text: '我的冰……在融化。这是……千年前的感觉。' },
+      { speaker: '黎恩', text: '你也是被黑暗冻结的守护者吗？' },
+      { speaker: '凛风', text: '带着「雪」走吧。愿极光指引你，找到最后的真相。' },
+    ],
+    mapNode: { x: 62, y: 62, icon: '❄️' },
+    petReward: PET_FROST,
+  },
+  // ---------- 关卡 5: 深渊王座 ----------
+  {
+    id: 4,
+    name: '深渊王座',
+    bossName: '深渊主宰·灭世',
+    groundY: GROUND_Y,
+    levelLength: 7400,
+    platforms: [
+      ...makeGround(7400, GROUND_Y),
+    ],
+    waves: [
+      { enemies: [
+        { type: 'void_wraith', x: 350, y: GROUND_Y - 32, count: 4, delay: 60 },
+        { type: 'abyss_knight', x: 650, y: GROUND_Y - 46, count: 2, delay: 120 },
+      ]},
+    ],
+    scenes: [
+      makeScene(0, '深渊入口', 2300, [
+        ...makeGround(2300, GROUND_Y),
+        { x: 250, y: 400, width: 120, height: 16, type: 'platform' },
+        { x: 700, y: 340, width: 130, height: 16, type: 'platform' },
+        { x: 1150, y: 400, width: 120, height: 16, type: 'platform' },
+      ], [
+        { enemies: [
+          { type: 'void_wraith', x: 350, y: GROUND_Y - 32, count: 4, delay: 60 },
+          { type: 'abyss_knight', x: 650, y: GROUND_Y - 46, count: 2, delay: 120 },
+        ]},
+        { enemies: [
+          { type: 'abyss_knight', x: 800, y: GROUND_Y - 46, count: 2, delay: 90 },
+          { type: 'magma_golem', x: 1000, y: GROUND_Y - 40, count: 2, delay: 130 },
+        ]},
+        { enemies: [
+          { type: 'void_wraith', x: 500, y: GROUND_Y - 32, count: 4, delay: 80 },
+          { type: 'abyss_knight', x: 1100, y: GROUND_Y - 46, count: 2, delay: 110 },
+          { type: 'void_wraith', x: 1350, y: 400, count: 2, delay: 140 },
+        ]},
+        { enemies: [
+          { type: 'abyss_knight', x: 1450, y: GROUND_Y - 46, count: 2, delay: 80, elite: true },
+          { type: 'void_wraith', x: 1600, y: GROUND_Y - 32, count: 3, delay: 110, elite: true },
+        ]},
+      ], 12, {
+        chests: [
+          { x: 300, type: 'gold' },
+          { x: 760, type: 'common' },
+        ],
+        secretArea: {
+          entranceX: 1250,
+          length: 440,
+          platforms: [
+            { x: 1260, y: 300, width: 130, height: 16, type: 'platform' },
+            { x: 1460, y: 220, width: 140, height: 16, type: 'platform' },
+          ],
+          chests: [{ x: 1510, type: 'special' }],
+          eliteGuards: [{ type: 'void_wraith', count: 2 }],
+          hint: '裂隙间有陌生的低语…',
+        },
+      }),
+      makeScene(1, '虚空长廊', 2400, [
+        ...makeGround(2400, GROUND_Y),
+        { x: 300, y: 350, width: 130, height: 16, type: 'platform' },
+        { x: 750, y: 280, width: 130, height: 16, type: 'platform' },
+        { x: 1250, y: 360, width: 120, height: 16, type: 'platform' },
+      ], [
+        { enemies: [
+          { type: 'void_wraith', x: 400, y: GROUND_Y - 32, count: 4, delay: 70 },
+          { type: 'ancient_golem', x: 800, y: GROUND_Y - 46, count: 1, delay: 130 },
+        ]},
+        { enemies: [
+          { type: 'abyss_knight', x: 900, y: GROUND_Y - 46, count: 3, delay: 90 },
+          { type: 'void_wraith', x: 1150, y: 280, count: 3, delay: 120 },
+        ]},
+        { enemies: [
+          { type: 'ancient_golem', x: 500, y: GROUND_Y - 46, count: 2, delay: 100 },
+          { type: 'void_wraith', x: 1000, y: GROUND_Y - 32, count: 3, delay: 120 },
+          { type: 'abyss_knight', x: 1350, y: GROUND_Y - 46, count: 2, delay: 140 },
+        ]},
+        { enemies: [
+          { type: 'ancient_golem', x: 1450, y: GROUND_Y - 46, count: 1, delay: 90, elite: true },
+          { type: 'abyss_knight', x: 1600, y: GROUND_Y - 46, count: 2, delay: 120, elite: true },
+        ]},
+      ], 13, {
+        chests: [
+          { x: 340, type: 'gold' },
+          { x: 800, type: 'common' },
+        ],
+        secretArea: {
+          entranceX: 1300,
+          length: 460,
+          platforms: [
+            { x: 1310, y: 240, width: 130, height: 16, type: 'platform' },
+            { x: 1530, y: 160, width: 150, height: 16, type: 'platform' },
+          ],
+          chests: [{ x: 1580, type: 'special' }],

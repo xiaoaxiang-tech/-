@@ -1,0 +1,201 @@
+        this.attacking = false
+        this.attackProgress = 0
+        this.attackMaxTimer = 0
+      } else {
+        this.attackProgress = 1 - this.attackTimer / this.attackMaxTimer
+      }
+    }
+    if (this.attackCooldown > 0) this.attackCooldown--
+    if (this.skill1Cooldown > 0) this.skill1Cooldown--
+    if (this.skill2Cooldown > 0) this.skill2Cooldown--
+    if (this.ultimateCooldown > 0) this.ultimateCooldown--
+    if (this.invincibleTimer > 0) {
+      this.invincibleTimer--
+      if (this.invincibleTimer <= 0) this.invincible = false
+    }
+    if (this.switchCooldown > 0) this.switchCooldown--
+    if (this.hitFlash > 0) this.hitFlash--
+
+    // 移动
+    this.vx = 0
+    if (input.left) {
+      this.vx = -this.speed
+      this.dir = 'left'
+    }
+    if (input.right) {
+      this.vx = this.speed
+      this.dir = 'right'
+    }
+
+    // 跳跃
+    if (input.jump && !this.jumpHeld) {
+      this.jumpHeld = true
+      if (this.onGround) {
+        this.vy = -this.jumpForce
+        this.onGround = false
+        this.canDoubleJump = true
+        this.hasDoubleJumped = false
+      } else if (this.canDoubleJump && !this.hasDoubleJumped) {
+        this.vy = -this.jumpForce * 0.75
+        this.hasDoubleJumped = true
+        this.canDoubleJump = false
+      }
+    }
+    if (!input.jump) this.jumpHeld = false
+
+    // 切换武器（Tab循环切换）
+    if (input.switchWeapon && this.switchCooldown <= 0) {
+      this.currentWeapon = getNextWeapon(this.currentWeapon)
+      this.currentWeaponStats = this.equippedWeapons[this.currentWeapon]
+      this.switchCooldown = 15
+    }
+
+    // 数字键1-4直接选择武器
+    if (input.directWeapon >= 0 && this.switchCooldown <= 0) {
+      const target = getWeaponByIndex(input.directWeapon)
+      if (target && target !== this.currentWeapon) {
+        this.currentWeapon = target
+        this.currentWeaponStats = this.equippedWeapons[this.currentWeapon]
+        this.switchCooldown = 10
+      }
+    }
+
+    // 技能1 - 剑气斩 / 突刺 / 多重箭 / 榴弹
+    if (justPressed.skill1 && this.skill1Cooldown <= 0 && this.mp >= 15) {
+      this.skill1Cooldown = this.skill1MaxCD
+      this.mp -= 15
+      this.startAttack(12)
+    }
+
+    // 技能2 - 回旋斩 / 龙卷 / 箭雨 / 激光炮
+    if (justPressed.skill2 && this.skill2Cooldown <= 0 && this.mp >= 30) {
+      this.skill2Cooldown = this.skill2MaxCD
+      this.mp -= 30
+      this.startAttack(18)
+    }
+
+    // 大招
+    if (justPressed.ultimate && this.ultimateCooldown <= 0 && this.mp >= 50) {
+      this.ultimateCooldown = this.ultimateMaxCD
+      this.mp -= 50
+      this.startAttack(30)
+    }
+
+    // 普通攻击
+    if (justPressed.attack && this.attackCooldown <= 0) {
+      if (this.mp >= this.currentWeaponStats.energyCost) {
+        this.attackCooldown = this.currentWeaponStats.attackSpeed
+        this.mp -= this.currentWeaponStats.energyCost
+        this.startAttack(12)
+      }
+    }
+
+    // 物理
+    this.vy += 0.8 // 重力
+    if (this.vy > 15) this.vy = 15
+
+    // 水平移动
+    this.x += this.vx
+
+    // 水平碰撞检测：只对玩家身体高度范围相交的平台做碰撞
+    if (this.vx !== 0) {
+      const prr = this.rect
+      const playerTop = prr.y
+      const playerBottom = prr.y + prr.height
+
+      for (const plat of platforms) {
+        const platTop = plat.y
+        const platBottom = plat.y + plat.height
+
+        // 跳过脚下的地面平台：玩家站在上面时不触发水平碰撞
+        if (playerBottom <= platTop + 6) continue
+        // 跳过头顶的：玩家完全在平台上方时也不水平碰撞
+        if (playerTop >= platBottom) continue
+
+        if (this.aabb(prr.x, prr.y, prr.width, prr.height, plat.x, plat.y, plat.width, plat.height)) {
+          if (this.vx > 0) this.x = plat.x - this.width + 4
+          else if (this.vx < 0) this.x = plat.x + plat.width - 4
+          this.vx = 0
+          break
+        }
+      }
+    }
+
+    // 垂直移动
+    this.y += this.vy
+    this.onGround = false
+
+    for (const plat of platforms) {
+      if (this.aabb(this.rect.x, this.rect.y, this.rect.width, this.rect.height, plat.x, plat.y, plat.width, plat.height)) {
+        if (this.vy > 0) {
+          this.y = plat.y - this.height + 4
+          this.vy = 0
+          this.onGround = true
+          this.canDoubleJump = false
+          this.hasDoubleJumped = false
+        } else if (this.vy < 0) {
+          this.y = plat.y + plat.height - 4
+          this.vy = 0
+        }
+      }
+    }
+
+    // 坠落复位：掉出画面底部后回到最近的安全平台，避免玩家卡在屏幕外上不来
+    // 画布高 640，坠落缓冲 80 → 掉到 y>720 判定为坠崖
+    if (this.y > this.fallLimit) {
+      this.respawnFromFall(platforms)
+    }
+
+    // 动画帧
+    if (this.onGround && Math.abs(this.vx) > 0) {
+      this.animFrame += 0.2
+    } else if (!this.onGround) {
+      this.animFrame += 0.1
+    } else {
+      this.animFrame += 0.05
+    }
+
+    // 暴露给渲染层用于选择动画帧
+    ;(window as any).__playerVx = this.vx
+    ;(window as any).__playerVy = this.vy
+  }
+
+  // 开始新一轮攻击：重置命中追踪
+  private startAttack(duration: number) {
+    this.attacking = true
+    this.attackMaxTimer = duration
+    this.attackTimer = duration
+    this.attackProgress = 0
+    this.hitTargets.clear()
+  }
+
+  // 检查是否本轮攻击已命中过该目标（避免同一挥砍多次伤害）
+  hasHitTarget(target: Enemy | Boss): boolean {
+    return this.hitTargets.has(target)
+  }
+
+  // 标记目标为已命中
+  markHit(target: Enemy | Boss) {
+    this.hitTargets.add(target)
+  }
+
+  private aabb(x1: number, y1: number, w1: number, h1: number, x2: number, y2: number, w2: number, h2: number): boolean {
+    return x1 < x2 + w2 && x1 + w1 > x2 && y1 < y2 + h2 && y1 + h1 > y2
+  }
+
+  takeDamage(amount: number): number | undefined {
+    if (this.invincible) return 0
+    const actualDmg = Math.max(1, amount - (this.defense + this.armorDefense) / 2)
+    this.hp -= actualDmg
+    this.invincible = true
+    this.invincibleTimer = 40
+    this.hitFlash = 10
+    return actualDmg
+  }
+
+  heal(amount: number) {
+    this.hp = Math.min(this.maxHp, this.hp + amount)
+  }
+
+  restoreMp(amount: number) {
+    this.mp = Math.min(this.maxMp, this.mp + amount)

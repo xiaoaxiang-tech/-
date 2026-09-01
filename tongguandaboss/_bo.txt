@@ -1,0 +1,80 @@
+
+  private buildObstacles(scene: { id: number; length: number; chests?: ChestConfig[]; obstacles?: ObstacleConfig[] }, offsetX: number): ObstacleData[] {
+    const configs = scene.obstacles?.length ? scene.obstacles : this.autoObstacleConfigs(scene)
+    return configs.map(c => {
+      const dims = OBSTACLE_DIMS[c.type]
+      const x = c.x + offsetX - dims.w / 2
+      const y = c.y !== undefined ? c.y - dims.h : this.config.groundY - dims.h
+      return {
+        x, y, w: dims.w, h: dims.h,
+        type: c.type,
+        hp: c.type === 'crate' ? 2 : c.type === 'barrel' ? 3 : 9999,
+        broken: false, hitFlash: 0, alive: true
+      }
+    })
+  }
+
+  /** 未手工配置障碍物时，按场景自动生成 2-4 个可交互障碍物（木箱/尖刺/炸药桶） */
+  private autoObstacleConfigs(scene: { id: number; length: number; chests?: ChestConfig[] }): ObstacleConfig[] {
+    const out: ObstacleConfig[] = []
+    const span = scene.length
+    const count = 2 + (scene.id % 3) // 2-4 个
+    // 宝箱 x 坐标（避开，避免重叠）
+    const chestXs = (scene.chests ?? []).map(c => c.x)
+    let placed = 0
+    let attempt = 0
+    while (placed < count && attempt < 80) {
+      attempt++
+      const base = 0.22 + (attempt % 5) * 0.05
+      const x = Math.floor(span * Math.min(base + placed * 0.2, 0.9))
+      if (x <= 200) continue
+      if (chestXs.some(cx => Math.abs(cx - x) < 80)) continue
+      const type: ObstacleType =
+        (scene.id + placed) % 3 === 0 ? 'barrel'
+          : (scene.id + placed) % 3 === 1 ? 'spikes'
+            : 'crate'
+      out.push({ x, type })
+      placed++
+    }
+    return out
+  }
+
+  private updateObstacles() {
+    for (let i = this.obstacles.length - 1; i >= 0; i--) {
+      const ob = this.obstacles[i]!
+      if (!ob.alive) { this.obstacles.splice(i, 1); continue }
+      if (ob.hitFlash > 0) ob.hitFlash--
+      const rect = { x: ob.x, y: ob.y, width: ob.w, height: ob.h }
+
+      // 尖刺：接触受伤（无敌帧内不重复触发）
+      if (ob.type === 'spikes' && !this.player.invincible && PhysicsManager.rectCollide(this.player.rect, rect)) {
+        const actual = this.player.takeDamage(Math.max(1, Math.floor(this.player.maxHp * 0.1)))
+        if (actual) {
+          this.particles.addFloatingText(this.player.x + this.player.width / 2, this.player.y, `-${actual}`, '#f66')
+          this.shake(3)
+          soundEngine.playPlayerHurt()
+          // 向反方向弹开
+          this.player.x += this.player.x + this.player.width / 2 < ob.x + ob.w / 2 ? -16 : 16
+        }
+      }
+
+      // 近战攻击破坏木箱/炸药桶
+      if (this.player.attacking && this.player.attackTimer > 4 && (ob.type === 'crate' || ob.type === 'barrel')) {
+        const ws = this.player.currentWeaponStats
+        if ((ws.type === 'sword' || ws.type === 'spear') && PhysicsManager.rectCollide(this.player.attackBox, rect)) {
+          ob.hitFlash = 6
+          ob.hp--
+          this.particles.emit(ob.x + ob.w / 2, ob.y + ob.h / 2, 4, '#ffcc88', { size: 2 })
+          soundEngine.playEnemyHit()
+          if (ob.hp <= 0) this.breakObstacle(ob)
+        }
+      }
+
+      // 炸药桶：玩家弹幕击中引爆
+      if (ob.type === 'barrel' && ob.alive) {
+        for (const p of this.projectiles) {
+          if (p.owner !== 'player') continue
+          if (PhysicsManager.rectCollide(projectileRect(p), rect)) {
+            this.breakObstacle(ob)
+            break
+          }

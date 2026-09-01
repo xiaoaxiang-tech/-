@@ -1,0 +1,6 @@
+7: import { createProjectile, updateProjectile, drawProjectileData, projectileRect } from '../entities/Projectile'
+698: if (p.type === 'web') {
+1141: const key = `${this.activeSceneIndex}-${this.waveIndex}-${group.type}`
+1149: const cfg = ENEMY_CONFIGS[group.type]!
+1516: drawPlatform(ctx, p.x, p.y, p.width, p.height, p.type, this.getActiveSceneTheme())
+1578: drawProjectileData(ctx, p)

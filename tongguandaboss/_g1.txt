@@ -1,0 +1,300 @@
+import type { GameConfig, GameState, Platform, LevelConfig, WeaponType, PetConfig, ChestConfig, ChestType, EquipDrop, EquipmentSlot, ObstacleConfig, ObstacleType } from '../types'
+import { LEVEL_CONFIGS } from './LevelConfigs'
+import { Player } from '../entities/Player'
+import { Enemy, ENEMY_CONFIGS } from '../entities/Enemy'
+import { Boss } from '../entities/Boss'
+import { PetEntity, drawPet } from '../entities/Pet'
+import { createProjectile, updateProjectile, drawProjectileData, projectileRect } from '../entities/Projectile'
+import type { ProjectileData } from '../entities/Projectile'
+import { ParticleSystem } from '../engine/ParticleSystem'
+import { PhysicsManager } from '../engine/PhysicsManager'
+import { drawBackground, drawPlatform, drawItemSprite, drawChestSprite, drawObstacleSprite } from '../engine/AssetLoader'
+import { rollEquipmentDrop, armorEquip, weaponEquip, randomWeaponType, getArmorSpec } from '../entities/Equipment'
+import { BackgroundAnimator } from '../engine/BackgroundAnimator'
+import { soundEngine } from '../engine/SoundEngine'
+
+interface ItemData {
+  x: number; y: number; w: number; h: number
+  type: string; life: number
+  /** equip 掉落物携带的装备数据 */
+  equip?: EquipDrop
+}
+
+/** 可交互障碍物（世界坐标） */
+interface ObstacleData {
+  x: number; y: number; w: number; h: number
+  type: ObstacleType
+  /** crate/barrel 的剩余血量（spikes 不可破坏） */
+  hp: number
+  broken: boolean
+  /** 受击闪白计时 */
+  hitFlash: number
+  alive: boolean
+}
+
+// 障碍物尺寸
+const OBSTACLE_DIMS: Record<ObstacleType, { w: number; h: number }> = {
+  crate: { w: 36, h: 30 },
+  spikes: { w: 64, h: 20 },
+  barrel: { w: 30, h: 34 }
+}
+
+/** 跨关卡/存档持久化的装备进度 */
+interface EquipState {
+  weaponTiers: Record<WeaponType, number>
+  weaponInventories: Record<WeaponType, number[]>
+  armorTier: number
+  armorInventory: number[]
+}
+
+interface ChestData {
+  /** 箱子中心 x（世界坐标） */
+  x: number
+  /** 箱子底部 y（贴地） */
+  y: number
+  w: number
+  h: number
+  type: ChestType
+  opened: boolean
+  /** 开箱动画计时（帧） */
+  openTimer: number
+}
+
+export function shouldAdvanceScene(sceneCleared: boolean, playerX: number, sceneStartX: number, sceneLength: number) {
+  if (!sceneCleared) return false
+  const sceneEndX = sceneStartX + sceneLength
+  const transitionStartX = sceneEndX - 220
+  return playerX >= transitionStartX
+}
+
+export function getSceneTransitionState(sceneCleared: boolean, playerX: number, sceneStartX: number, sceneLength: number) {
+  if (!sceneCleared) return { canAdvance: false, progress: 0, message: '清理当前区域的敌人' }
+  const sceneEndX = sceneStartX + sceneLength
+  const transitionStartX = sceneEndX - 220
+  const progress = Math.min(1, Math.max(0, (playerX - (sceneEndX - 400)) / 220))
+  const canAdvance = playerX >= transitionStartX
+  return {
+    canAdvance,
+    progress,
+    message: canAdvance ? '前方传送门已开启' : '继续向前，传送门即将开启'
+  }
+}
+
+export class GameScene {
+  config: GameConfig
+  player: Player
+  particles: ParticleSystem
+  bgAnimator: BackgroundAnimator
+  state: GameState = 'menu'
+
+  currentLevelId: number = 0
+  private levelConfig!: LevelConfig
+  private platforms: Platform[] = []
+  private enemies: Enemy[] = []
+  private boss: Boss | null = null
+  private projectiles: ProjectileData[] = []
+  private items: ItemData[] = []
+  /** 可交互障碍物（木箱 / 尖刺 / 炸药桶） */
+  private obstacles: ObstacleData[] = []
+
+  private waveIndex: number = 0
+  private waveSpawnTimers: Map<string, number> = new Map()
+  private isBossStage: boolean = false
+  private activeSceneIndex: number = 0
+  private sceneStartX: number = 0
+  private sceneCleared: boolean = false
+  private sceneHintTimer: number = 0
+  private sceneHintText: string = ''
+  private bossSpawned: boolean = false
+  private preBossTimer: number = 0
+  private levelCompleteTimer: number = 0
+  private bossWarningTimer: number = 0
+  private gameOverTimer: number = 0
+
+  // ==== 宝箱 & 秘密通道 ====
+  private chests: ChestData[] = []
+  private secretSpawned = new Set<string>()
+  private secretHintKey: string = ''
+
+  // ====== 场景过渡动画 ======
+  private sceneTransitionTimer: number = 0
+  private sceneTransitionPhase: 'idle' | 'fadeout' | 'hold' | 'fadein' = 'idle'
+  private transitionFromSceneName: string = ''
+  private transitionToSceneName: string = ''
+  private transitionAlpha: number = 0
+  private pendingSceneIndex: number = -1
+
+  cameraX: number = 0
+  cameraY: number = 0
+  private shakeTime: number = 0
+  private shakeIntensity: number = 0
+  private lastWeapon: WeaponType = 'sword'
+  // 宠物
+  petEntity: PetEntity | null = null
+  activePetConfig: PetConfig | null = null
+  onPetUnlock?: () => void  // 宠物解锁回调
+
+  onStateChange?: (state: GameState) => void
+  onStatsChange?: (stats: any) => void
+  onBossHP?: (hp: number, maxHp: number, name: string) => void
+  onWaveChange?: (wave: number, total: number) => void
+  /** 装备变更回调（拾取/手动切换） */
+  onEquipmentChange?: (info: {
+    kind: 'weapon' | 'armor'
+    slot: EquipmentSlot
+    weaponType?: WeaponType
+    name: string
+    tier: number
+    equipped: boolean
+    levelId: number
+  }) => void
+
+  constructor(config: GameConfig) {
+    this.config = config
+    this.player = new Player(200, config.groundY - 55)
+    this.particles = new ParticleSystem()
+    this.bgAnimator = new BackgroundAnimator()
+    soundEngine.init()
+  }
+
+  startLevel(levelId: number) {
+    this.currentLevelId = levelId
+    const levelConfig = LEVEL_CONFIGS[levelId]
+    if (!levelConfig) return
+    this.levelConfig = levelConfig
+    const scenes = this.getLevelScenes()
+    const firstScene = scenes[0]
+    if (!firstScene) return
+    this.platforms = this.buildScenePlatforms(firstScene, 0)
+    this.enemies = []; this.boss = null; this.projectiles = []; this.items = []
+    this.chests = this.buildChests(firstScene, 0)
+    this.obstacles = this.buildObstacles(firstScene, 0)
+    this.secretSpawned.clear(); this.secretHintKey = ''
+    this.waveIndex = 0; this.waveSpawnTimers.clear()
+    this.isBossStage = false; this.bossSpawned = false
+    this.activeSceneIndex = 0; this.sceneStartX = 0
+    this.sceneCleared = false
+    this.sceneHintTimer = 0; this.sceneHintText = ''
+    this.preBossTimer = 0; this.levelCompleteTimer = 0
+    this.bossWarningTimer = 0; this.gameOverTimer = 0
+    this.cameraX = 0; this.cameraY = 0
+    this.player.respawn(200, this.config.groundY - 55)
+    // 应用冒险进度中的装备状态（跨关卡保留）
+    const equipState = (window as any).__equipState as EquipState | undefined
+    if (equipState) {
+      const types: WeaponType[] = ['sword', 'spear', 'bow', 'gun']
+      for (const t of types) {
+        this.player.equipWeapon(t, equipState.weaponTiers?.[t] ?? 0)
+      }
+      if (typeof equipState.armorTier === 'number' && equipState.armorTier >= 0) {
+        this.player.equipArmor(equipState.armorTier)
+      }
+    }
+    this.player.currentWeapon = 'sword'
+    this.player.currentWeaponStats = this.player.equippedWeapons['sword']
+    this.lastWeapon = 'sword'
+    // 初始化宠物（如果已激活）
+    const activePet = (window as any).__activePetConfig as PetConfig | undefined
+    if (activePet) {
+      this.activePetConfig = activePet
+      this.petEntity = new PetEntity(activePet, this.player.x - 40, this.player.y - 20)
+      // 应用 buff
+      this.applyPetBuff(activePet)
+    } else {
+      this.activePetConfig = null
+      this.petEntity = null
+    }
+    this.state = 'playing'
+    this.onStateChange?.('playing')
+    this.sendBossHP()
+    this.bgAnimator.init(levelId, this.config.width, this.config.height)
+    this.bgAnimator.setTheme(firstScene.theme ?? 0)
+    soundEngine.resume()
+    soundEngine.startMusic(levelId)
+  }
+
+  // 应用宠物 buff 到玩家
+  private applyPetBuff(petConfig: PetConfig) {
+    const buff = petConfig.buff
+    switch (buff.type) {
+      case 'attack': this.player.attack += buff.value; break
+      case 'defense': this.player.defense += buff.value; break
+      case 'mp': this.player.maxMp += buff.value; this.player.mp = Math.min(this.player.mp + buff.value, this.player.maxMp); break
+      case 'hp': this.player.maxHp += buff.value; this.player.hp = Math.min(this.player.hp + buff.value, this.player.maxHp); break
+      case 'speed': this.player.speed += buff.value; break
+    }
+  }
+
+  update() {
+    if (this.state !== 'playing') return
+    if (this.shakeTime > 0) this.shakeTime--
+
+    // Boss 已死亡：安全过渡阶段
+    const bossDead = this.boss && !this.boss.isAlive
+    if (bossDead) {
+      // 清屏：清除所有敌人投射物
+      this.projectiles = this.projectiles.filter(p => p.owner !== 'enemy')
+      // 清除所有敌人（Boss死后小怪撤退）
+      this.enemies = []
+      // 玩家无敌，不会被致死
+      this.player.invincible = true
+      // 玩家缓慢回复少量血量
+      if (this.player.hp < this.player.maxHp) {
+        this.player.hp = Math.min(this.player.maxHp, this.player.hp + 0.5)
+      }
+    }
+
+    this.player.update(this.getInputState(), this.getCollisionPlatforms())
+    this.sendStats()
+    this.sendBossHP()
+
+    // 武器切换提示
+    if (!bossDead && this.player.currentWeapon !== this.lastWeapon) {
+      this.lastWeapon = this.player.currentWeapon
+      this.particles.addFloatingText(
+        this.player.x + this.player.width / 2,
+        this.player.y - 10,
+        this.player.currentWeaponStats.name,
+        '#ffd700'
+      )
+    }
+
+    const targetCamX = this.player.x - this.config.width / 2
+    this.cameraX += (targetCamX - this.cameraX) * 0.1
+    this.cameraX = Math.max(0, Math.min(this.cameraX, this.levelConfig.levelLength - this.config.width))
+
+    if (!bossDead) {
+      this.updateItems()
+      this.updateObstacles()
+      this.updateChests()
+      this.updateEnemies()
+      if (this.boss && this.boss.isAlive) this.boss.update(this.player.x, this.player.y)
+      this.processCombat()
+      if (!this.isBossStage) {
+        this.manageWaves()
+        this.updateSecretArea()
+      }
+      if (!this.isBossStage) this.updateSceneTransition()
+      this.updateBossStage()
+    }
+    this.updateProjectiles()
+    if (this.boss && !this.boss.isAlive && this.levelCompleteTimer === 0) {
+      this.levelCompleteTimer = 1
+      soundEngine.playBossDefeated()
+      // Boss 战利品：必掉一件高阶装备（第 4 关起可出神话阶）
+      if (this.boss) this.dropEquip(this.boss.x, this.boss.y, Math.min(4, this.currentLevelId + 2))
+    }
+    if (this.levelCompleteTimer > 0) {
+      this.levelCompleteTimer++
+      if (this.levelCompleteTimer > 120) {
+        const newState = this.currentLevelId >= LEVEL_CONFIGS.length - 1 ? 'victory' : 'levelComplete'
+        this.state = newState
+        this.onStateChange?.(newState)
+        if (newState === 'victory') {
+          soundEngine.playVictory()
+          soundEngine.stopMusic()
+        } else {
+          soundEngine.playLevelUp()
+        }
+      }
+    }

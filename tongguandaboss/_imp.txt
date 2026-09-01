@@ -1,0 +1,1 @@
+1: import type { GameConfig, GameState, Platform, LevelConfig, WeaponType, PetConfig, ChestConfig, ChestType, EquipDrop, EquipmentSlot, ObstacleConfig, ObstacleType } from '../types'

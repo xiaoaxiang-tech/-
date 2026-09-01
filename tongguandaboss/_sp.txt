@@ -1,0 +1,300 @@
+import type { Direction, WeaponType, EquipDrop } from '../types'
+import { generateAllSpriteSheets, getSpriteSheet } from './SpriteSheetGenerator'
+import { generateAllBackgrounds, getBackground } from './BackgroundGenerator'
+
+// 装备阶数（0-4）对应的辉光色：灰 → 绿 → 秘银蓝 → 冰紫 → 神话金
+const TIER_GLOWS = ['#b8b8b8', '#6fce6f', '#4fa3ff', '#d27bff', '#ffb13d']
+
+// 图像缓存
+const imageCache: Map<string, HTMLImageElement> = new Map()
+const loadedImages: Set<string> = new Set()
+
+// 检测当前环境是否支持 Canvas 2D（jsdom 等测试环境不支持时跳过程序化精灵生成，避免崩溃）
+function isCanvas2DSupported(): boolean {
+  try {
+    const c = document.createElement('canvas')
+    return !!c.getContext('2d')
+  } catch {
+    return false
+  }
+}
+
+// 启动时生成所有精灵图
+if (isCanvas2DSupported()) {
+  generateAllSpriteSheets()
+  generateAllBackgrounds()
+}
+
+export function loadImage(key: string, url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    if (imageCache.has(key)) {
+      resolve(imageCache.get(key)!)
+      return
+    }
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      imageCache.set(key, img)
+      loadedImages.add(key)
+      resolve(img)
+    }
+    img.onerror = () => {
+      console.warn(`[AssetLoader] Failed to load: ${url}`)
+      loadedImages.add(key) // mark as attempted
+      resolve(img) // resolve anyway, we'll use fallback drawing
+    }
+    img.src = url
+  })
+}
+
+export function getImage(key: string): HTMLImageElement | undefined {
+  return imageCache.get(key)
+}
+
+export function isImageLoaded(key: string): boolean {
+  return loadedImages.has(key)
+}
+
+// ========== 精灵绘制函数（程序化像素艺术） ==========
+
+export function drawPlayerSprite(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number,
+  dir: Direction, animFrame: number,
+  weaponType: WeaponType, tier: number,
+  attacking: boolean,
+  onGround: boolean,
+  attackProgress: number = 0
+) {
+  ctx.save()
+
+  // === 真正的精灵图帧动画 ===
+  let sheetKey = 'player_idle'
+  if (attacking) sheetKey = 'player_attack'
+  else if (!onGround) sheetKey = 'player_jump'
+  else if (Math.abs((window as any).__playerVx || 0) > 0.1) sheetKey = 'player_walk'
+  else sheetKey = 'player_idle'
+
+  const sheet = getSpriteSheet(sheetKey)
+
+  if (sheet) {
+    // 计算当前帧索引
+    let frameIdx: number
+    if (sheetKey === 'player_attack') {
+      // 攻击动画按 attackProgress 直接映射到帧
+      frameIdx = Math.min(sheet.frameCount - 1, Math.floor(attackProgress * sheet.frameCount))
+    } else if (sheetKey === 'player_jump') {
+      // 跳跃按 vy 映射到 4 帧
+      const vy = (window as any).__playerVy || 0
+      frameIdx = vy < -5 ? 1 : vy < 0 ? 2 : vy > 5 ? 3 : 0
+    } else {
+      // idle/walk 用 animFrame 循环
+      frameIdx = Math.floor(animFrame) % sheet.frameCount
+    }
+
+    const sx = frameIdx * sheet.frameWidth
+    const cx = x + w / 2
+    // 方向翻转
+    if (dir === 'left') {
+      ctx.translate(cx * 2, 0)
+      ctx.scale(-1, 1)
+    }
+    // 用 9 参数 drawImage 切片绘制精灵图的某一帧
+    const padX = (w - sheet.frameWidth) / 2
+    const padY = (h - sheet.frameHeight) / 2
+    ctx.drawImage(
+      sheet.canvas,
+      sx, 0, sheet.frameWidth, sheet.frameHeight,
+      x + padX, y + padY, sheet.frameWidth, sheet.frameHeight
+    )
+    ctx.restore()
+
+    // 在精灵图上叠加武器
+    drawPlayerWeapon(ctx, x, y, w, h, dir, weaponType, tier, attacking, attackProgress)
+
+    // 武器特定攻击特效（随阶数升级：越高阶弧光越宽、颜色越华丽）
+    if (attacking && attackProgress > 0.1 && attackProgress < 0.8) {
+      ctx.save()
+      const flip = dir === 'left' ? -1 : 1
+      const isMelee = weaponType === 'sword' || weaponType === 'spear'
+      const glow = TIER_GLOWS[Math.max(0, Math.min(4, tier))]!
+
+      if (isMelee) {
+        const slashAlpha = Math.sin(attackProgress * Math.PI) * (0.65 + tier * 0.06)
+        const slashAngle = (attackProgress - 0.45) * 1.4
+        ctx.translate(x + w / 2 + (attackProgress - 0.5) * 12 * flip, y + h / 2 - 6)
+        if (dir === 'left') ctx.scale(-1, 1)
+        ctx.rotate(slashAngle)
+        if (tier >= 2) { ctx.shadowColor = glow; ctx.shadowBlur = 14 }
+        ctx.globalAlpha = slashAlpha
+        // 外弧（随阶数变宽、变长）
+        ctx.strokeStyle = tier >= 3 ? glow : '#ffffff'
+        ctx.lineWidth = 2.5 + tier * 0.8
+        ctx.beginPath(); ctx.arc(2, 0, 28 + tier * 4, -0.7, 0.7); ctx.stroke()
+        // 内弧
+        ctx.strokeStyle = tier >= 3 ? '#ffffff' : '#ffdd55'
+        ctx.lineWidth = 4 + tier
+        ctx.globalAlpha = slashAlpha * 0.5
+        ctx.beginPath(); ctx.arc(2, 0, 20 + tier * 3, -0.5, 0.5); ctx.stroke()
+        // T4 额外第三层华丽弧光
+        if (tier >= 4) {
+          ctx.globalAlpha = slashAlpha * 0.4
+          ctx.strokeStyle = '#fff3c0'
+          ctx.lineWidth = 6
+          ctx.beginPath(); ctx.arc(2, 0, 14 + tier * 3, -0.35, 0.35); ctx.stroke()
+        }
+      } else if (weaponType === 'gun') {
+        const flashAlpha = Math.sin(attackProgress * Math.PI)
+        const muzzleX = x + w / 2 + (dir === 'right' ? 22 : -22)
+        const muzzleY = y + h / 2 - 5
+        ctx.globalAlpha = flashAlpha
+        ctx.shadowColor = '#ffaa00'
+        ctx.shadowBlur = 8 + tier * 4
+        ctx.fillStyle = '#ffaa00'
+        ctx.beginPath(); ctx.arc(muzzleX, muzzleY, 7 + tier * 2, 0, Math.PI * 2); ctx.fill()
+        ctx.fillStyle = tier >= 3 ? glow : '#ffff44'
+        ctx.beginPath(); ctx.arc(muzzleX, muzzleY, 4 + tier, 0, Math.PI * 2); ctx.fill()
+        ctx.fillStyle = '#fff'
+        ctx.beginPath(); ctx.arc(muzzleX, muzzleY, 2, 0, Math.PI * 2); ctx.fill()
+        // 高阶枪口散射火花
+        if (tier >= 2) {
+          for (let s = 0; s < tier; s++) {
+            const a = Math.PI * 2 * s / tier + attackProgress * 6
+            ctx.fillStyle = tier >= 4 ? '#ffd24d' : '#ff8833'
+            ctx.globalAlpha = flashAlpha * 0.8
+            ctx.beginPath(); ctx.arc(muzzleX + Math.cos(a) * (7 + tier), muzzleY + Math.sin(a) * (7 + tier), 1.5, 0, Math.PI * 2); ctx.fill()
+          }
+        }
+      } else if (weaponType === 'bow') {
+        const chargeAlpha = Math.sin(attackProgress * Math.PI) * (0.6 + tier * 0.08)
+        const bowX = x + w / 2 + (dir === 'right' ? -8 : 8)
+        const bowY = y + h / 2 - 5
+        ctx.globalAlpha = chargeAlpha
+        ctx.shadowColor = tier >= 3 ? glow : '#aaffcc'
+        ctx.shadowBlur = 6 + tier * 4
+        ctx.strokeStyle = tier >= 3 ? glow : '#aaffcc'
+        ctx.lineWidth = 1.5 + tier * 0.5
+        ctx.beginPath(); ctx.arc(bowX, bowY, 10 + tier, -0.8, 0.8); ctx.stroke()
+        ctx.fillStyle = '#ffffff'
+        ctx.beginPath(); ctx.arc(bowX + (dir === 'right' ? 4 : -4), bowY, 2 + tier * 0.4, 0, Math.PI * 2); ctx.fill()
+      }
+      ctx.restore()
+      ctx.globalAlpha = 1
+    }
+    return
+  }
+
+  // 程序化绘制回退
+  drawPixelPlayer(ctx, x, y, w, h, dir, animFrame, weaponType, tier, attacking, onGround, attackProgress)
+  ctx.restore()
+}
+
+function drawPixelPlayer(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number,
+  dir: Direction, animFrame: number,
+  weaponType: WeaponType, tier: number,
+  attacking: boolean,
+  onGround: boolean,
+  attackProgress: number = 0
+) {
+  const flip = dir === 'left' ? -1 : 1
+  const fx = dir === 'left' ? x + w : x
+  ctx.save()
+  ctx.translate(fx, y)
+  ctx.scale(flip, 1)
+
+  // ===== 攻击斜斩特效（随阶数升级） =====
+  if (attacking && attackProgress > 0.1 && attackProgress < 0.8) {
+    const slashAlpha = Math.sin(attackProgress * Math.PI) * (0.65 + tier * 0.06)
+    const slashAngle = (attackProgress - 0.45) * 1.4
+    const glow = TIER_GLOWS[Math.max(0, Math.min(4, tier))]!
+    ctx.save()
+    ctx.translate(w / 2 + (attackProgress - 0.5) * 14, h / 2 - 6)
+    ctx.rotate(slashAngle)
+    if (tier >= 2) { ctx.shadowColor = glow; ctx.shadowBlur = 14 }
+    ctx.globalAlpha = slashAlpha
+    ctx.strokeStyle = tier >= 3 ? glow : '#ffffff'
+    ctx.lineWidth = 2.5 + tier * 0.8
+    ctx.beginPath(); ctx.arc(0, 0, 34 + tier * 4, -0.7, 0.7); ctx.stroke()
+    ctx.strokeStyle = tier >= 3 ? '#ffffff' : '#ffdd55'
+    ctx.lineWidth = 4 + tier
+    ctx.globalAlpha = slashAlpha * 0.5
+    ctx.beginPath(); ctx.arc(0, 0, 26 + tier * 3, -0.5, 0.5); ctx.stroke()
+    ctx.restore()
+    ctx.globalAlpha = 1
+  }
+
+  // ===== 攻击身体前倾 =====
+  const leanAmount = attacking ? Math.sin(attackProgress * Math.PI) * 3 : 0
+  ctx.save()
+  if (leanAmount > 0.5) ctx.translate(leanAmount * 0.5, 0)
+
+  // 阴影
+  ctx.fillStyle = 'rgba(0,0,0,0.3)'
+  ctx.fillRect(2, h - 4, w - 4, 4)
+
+  // 腿部动画（攻击时停步）
+  const isWalking = onGround && !attacking
+  const legOffset = isWalking ? Math.sin(animFrame * 0.6) * 4 : (attacking ? -1 : -2)
+  const legOffset2 = isWalking ? Math.sin(animFrame * 0.6 + Math.PI) * 4 : (attacking ? 1 : 2)
+
+  // 腿
+  ctx.fillStyle = '#5a3a2a'
+  ctx.fillRect(8, h - 22, 8, 18)
+  ctx.fillRect(20, h - 22 + legOffset, 8, 18 + legOffset2)
+
+  // 靴子
+  ctx.fillStyle = '#3a2010'
+  ctx.fillRect(6, h - 8, 12, 8)
+  ctx.fillRect(18 + legOffset, h - 8 + legOffset2, 12, 8)
+
+  // 身体（铠甲）
+  const armorGrad = ctx.createLinearGradient(4, h - 40, 28, h - 20)
+  armorGrad.addColorStop(0, '#4a90d9')
+  armorGrad.addColorStop(0.5, '#6ab0ff')
+  armorGrad.addColorStop(1, '#3a70b0')
+  ctx.fillStyle = armorGrad
+  ctx.fillRect(6, h - 42, 20, 24)
+
+  // 铠甲细节
+  ctx.fillStyle = '#ffd700'
+  ctx.fillRect(14, h - 38, 4, 4)
+  ctx.fillRect(10, h - 28, 12, 3)
+  ctx.fillStyle = '#c0c0c0'
+  ctx.fillRect(12, h - 35, 2, 6)
+  ctx.fillRect(18, h - 35, 2, 6)
+
+  // 护肩
+  ctx.fillStyle = '#8b8b8b'
+  ctx.fillRect(2, h - 44, 8, 6)
+  ctx.fillRect(22, h - 44, 8, 6)
+
+  // 头
+  ctx.fillStyle = '#ffdbb4'
+  ctx.fillRect(10, h - 54, 12, 12)
+
+  // 头盔
+  ctx.fillStyle = '#888'
+  ctx.beginPath()
+  ctx.arc(16, h - 48, 9, Math.PI, 0)
+  ctx.fill()
+  ctx.fillStyle = '#ffd700'
+  ctx.fillRect(14, h - 56, 4, 3)
+
+  // 攻击时眼睛发光
+  if (attacking && attackProgress > 0.2) {
+    ctx.fillStyle = '#ff3333'
+    ctx.fillRect(12, h - 50, 7, 2)
+  } else {
+    ctx.fillStyle = '#000'
+    ctx.fillRect(14, h - 50, 2, 2)
+  }
+
+  ctx.restore() // 恢复身体前倾
+
+  // 手臂 - 攻击时做蓄力+挥砍动作
+  let armAngle: number
+  if (attacking) {
+    const t = attackProgress
+    if (t < 0.4) {

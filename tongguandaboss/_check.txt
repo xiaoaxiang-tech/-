@@ -1,0 +1,4 @@
+668: enemy.takeDamage(p.damage)
+679: this.boss.takeDamage(p.damage)
+698: const dmg = this.player.takeDamage(p.damage)
+983: this.player.slowTimer = Math.max(this.player.slowTimer, 70)

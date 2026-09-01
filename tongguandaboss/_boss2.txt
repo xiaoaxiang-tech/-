@@ -1,0 +1,130 @@
+  update(playerX: number, playerY: number, _dt: number = 1) {
+    if (!this.isAlive) return
+    this.animFrame++
+    if (this.hitFlash > 0) this.hitFlash--
+
+    // 阶段切换
+    const hpRatio = this.hp / this.maxHp
+    if (this.config.phases.length >= 3 && hpRatio < this.config.phases[2]!.hpThreshold) {
+      if (this.currentPhase !== 2) { this.currentPhase = 2; this.onPhaseChange() }
+    } else if (this.config.phases.length >= 2 && hpRatio < this.config.phases[1]!.hpThreshold) {
+      if (this.currentPhase !== 1) { this.currentPhase = 1; this.onPhaseChange() }
+    }
+
+    this.attackTimer++
+    this.specialTimer++
+    this.summonTimer++
+    this.phase2Timer++
+    this.patternTimer++
+    this.shootCooldown++
+
+    const dx = playerX - this.x
+    const dy = playerY - this.y
+    this.dir = dx > 0 ? 'right' : 'left'
+
+    // ===== 招式状态机：休整 → 起手 → 释放 → 恢复 → 休整 =====
+    switch (this.patternState) {
+      case 'rest': {
+        this.executeRest(dx, dy)
+        // 休整至少持续 attackInterval 帧（相当于出招冷却），之后进入下一招的起手
+        if (this.patternTimer >= Math.max(this.phase.attackInterval, 24)) {
+          this.enterState('windup')
+        }
+        break
+      }
+      case 'windup': {
+        // 起手/蓄力：站定不动，攒出攻击气势
+        this.vx = 0
+        const t = PATTERN_TIMING[this.currentPattern]
+        if (this.patternTimer >= t.windup) {
+          this.meleeFired = false
+          this.aoeFired = false
+          this.summonFired = false
+          this.shootCooldown = 8
+          this.enterState('active')
+        }
+        break
+      }
+      case 'active': {
+        this.executeActive(dx, dy)
+        const t = PATTERN_TIMING[this.currentPattern]
+        if (this.patternTimer >= t.active) {
+          this.enterState('recover')
+        }
+        break
+      }
+      case 'recover': {
+        this.executeRecover(dx, dy)
+        const t = PATTERN_TIMING[this.currentPattern]
+        if (this.patternTimer >= t.recover) {
+          this.enterState('rest')
+          this.pickNextPattern()
+        }
+        break
+      }
+    }
+
+    // 重力
+    this.vy += 0.8
+    if (this.vy > 12) this.vy = 12
+    this.x += this.vx
+    this.y += this.vy
+    if (this.y >= this.groundLevel - this.height) {
+      this.y = this.groundLevel - this.height
+      this.vy = 0
+    }
+    if (this.y < 0) this.y = 0
+  }
+
+  private enterState(state: PatternState) {
+    this.patternState = state
+    this.patternTimer = 0
+  }
+
+  /** 阶段内招式轮换：绝不连续重复 */
+  private pickNextPattern() {
+    const list = this.patternList
+    if (list.length <= 1) {
+      this.currentPattern = list[0]!
+      this.lastPattern = this.currentPattern
+      return
+    }
+    const candidates = list.filter(p => p !== this.lastPattern)
+    const pool = candidates.length > 0 ? candidates : list
+    const idx = Math.min(pool.length - 1, Math.floor(this.random() * pool.length))
+    this.currentPattern = pool[idx]!
+    this.lastPattern = this.currentPattern
+  }
+
+  private onPhaseChange() {
+    this.attackTimer = 0
+    this.specialTimer = 0
+    this.isSpinning = false
+    this.patternState = 'rest'
+    this.patternTimer = 0
+    this.currentPattern = this.patternList[0]!
+    this.lastPattern = this.currentPattern
+    // BOSS跳跃+短暂无敌动画
+    this.vy = -18
+  }
+
+  /** 休整：贴近玩家，蓄势待发 */
+  private executeRest(dx: number, _dy: number) {
+    const speed = this.phase.speed
+    if (Math.abs(dx) > 80) {
+      this.vx = dx > 0 ? speed : -speed
+    } else {
+      // 逼近后左右小碎步 + 偶尔跳跃：让 Boss 更灵活、更难被站桩输出
+      this.vx = Math.sin(this.attackTimer * 0.12) * 0.7
+      if (this.attackTimer % 60 === 0 && this.vy === 0 && this.random() < 0.55) {
+        this.vy = -10
+      }
+    }
+  }
+
+  /** 释放阶段：执行招式动作 */
+  private executeActive(dx: number, _dy: number) {
+    switch (this.currentPattern) {
+      case 'melee':
+        // 近战逼近，贴身出拳（伤害由 GameScene 在 active 窗口消费）
+        this.vx = Math.abs(dx) > 40 ? (dx > 0 ? this.phase.speed : -this.phase.speed) : 0

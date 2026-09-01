@@ -1,0 +1,34 @@
+export interface EnemyConfig {
+  name: string
+  type: EnemyType
+  hp: number
+  attack: number
+  speed: number
+  width: number
+  height: number
+  exp: number
+  behavior: 'chase' | 'patrol' | 'ranged' | 'charge' | 'tank'
+  dropTable: { item: string; chance: number }[]
+}
+
+export type BossPattern = 'melee' | 'projectile' | 'charge' | 'summon' | 'aoe' | 'spin'
+
+export interface BossPhase {
+  pattern: BossPattern
+  /** 该阶段可组合的招式列表（Boss 会在其中轮换，避免连续重复）；
+   *  未配置时退化为只使用 pattern 一个招式 */
+  patterns?: BossPattern[]
+  speed: number
+  attackDamage: number
+  attackInterval: number
+  hpThreshold: number       // 进入该阶段的血量百分比
+}
+
+export interface BossConfig {
+  name: string
+  maxHp: number
+  width: number
+  height: number
+  phases: BossPhase[]
+  dropExp: number
+}

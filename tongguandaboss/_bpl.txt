@@ -1,0 +1,79 @@
+          this.sceneTransitionTimer = 0
+        }
+        break
+    }
+  }
+
+  private getLevelScenes() {
+    if (this.levelConfig.scenes?.length) return this.levelConfig.scenes
+    return [{ id: 0, name: '主线', length: this.levelConfig.levelLength, platforms: this.levelConfig.platforms, waves: this.levelConfig.waves }]
+  }
+
+  private getActiveScene() {
+    return this.getLevelScenes()[this.activeSceneIndex]
+  }
+
+  /** 当前激活场景的背景主题索引 */
+  private getActiveSceneTheme(): number {
+    return this.getActiveScene()?.theme ?? 0
+  }
+
+  /** 待切换目标场景的背景主题索引 */
+  private getPendingSceneTheme(): number {
+    if (this.pendingSceneIndex < 0) return 0
+    return this.getLevelScenes()[this.pendingSceneIndex]?.theme ?? 0
+  }
+
+  private buildScenePlatforms(scene: { platforms: Platform[]; secretArea?: { platforms?: Platform[] } }, offsetX: number) {
+    const all = [...scene.platforms, ...(scene.secretArea?.platforms ?? [])]
+    return all.map(platform => ({ ...platform, x: platform.x + offsetX }))
+  }
+
+  private advanceToNextScene() {
+    const scenes = this.getLevelScenes()
+    if (this.activeSceneIndex >= scenes.length - 1) {
+      this.isBossStage = true
+      return
+    }
+
+    // 启动场景过渡动画（而不是瞬间切换）
+    const currentScene = scenes[this.activeSceneIndex]!
+    this.transitionFromSceneName = currentScene.name
+    this.transitionToSceneName = scenes[this.activeSceneIndex + 1]!.name
+    this.pendingSceneIndex = this.activeSceneIndex + 1
+    this.sceneTransitionPhase = 'fadeout'
+    this.sceneTransitionTimer = 0
+    this.transitionAlpha = 0
+    // 暂停玩家输入
+    this.player.vx = 0
+    this.player.vy = 0
+    soundEngine.playPickupHealth() // 复用音效作为传送音效
+  }
+
+  // 执行场景切换（在过渡动画的 hold 阶段调用）
+  private executeSceneSwitch() {
+    const scenes = this.getLevelScenes()
+    if (this.pendingSceneIndex < 0 || this.pendingSceneIndex >= scenes.length) return
+
+    this.activeSceneIndex = this.pendingSceneIndex
+    this.pendingSceneIndex = -1
+    this.waveIndex = 0
+    this.waveSpawnTimers.clear()
+    this.enemies = []
+    this.projectiles = this.projectiles.filter(p => p.owner !== 'enemy')
+    this.sceneCleared = false
+
+    const scene = scenes[this.activeSceneIndex]!
+    const previousOffset = this.sceneStartX
+    this.sceneStartX = scenes.slice(0, this.activeSceneIndex).reduce((sum, item) => sum + item.length, 0)
+    this.platforms = this.buildScenePlatforms(scene, this.sceneStartX)
+    this.chests = this.buildChests(scene, this.sceneStartX)
+    this.obstacles = this.buildObstacles(scene, this.sceneStartX)
+    this.secretSpawned.clear()
+    this.secretHintKey = ''
+
+    this.player.x = Math.max(this.sceneStartX + 80, Math.min(this.player.x + 80, this.sceneStartX + scene.length - 120))
+    this.player.y = this.config.groundY - this.player.height
+    this.player.vx = 0
+    this.player.vy = 0
+    this.cameraX = Math.max(0, Math.min(this.sceneStartX, this.levelConfig.levelLength - this.config.width))
